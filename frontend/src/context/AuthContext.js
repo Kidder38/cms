@@ -1,0 +1,124 @@
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import axios from 'axios';
+import { API_URL } from '../config';
+
+// Vytvoření kontextu
+const AuthContext = createContext();
+
+// Provider komponenta
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('token') || null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Funkce pro přihlášení
+  const login = async (username, password) => {
+    try {
+      setError(null);
+      const response = await axios.post(`${API_URL}/auth/login`, { username, password });
+      
+      const { token, user } = response.data;
+      
+      // Uložení tokenu do localStorage
+      localStorage.setItem('token', token);
+      setToken(token);
+      setUser(user);
+      
+      return user;
+    } catch (error) {
+      setError(error.response?.data?.message || 'Přihlášení se nezdařilo.');
+      throw error;
+    }
+  };
+
+  // Funkce pro registraci
+  const register = async (userData) => {
+    try {
+      setError(null);
+      const response = await axios.post(`${API_URL}/auth/register`, userData);
+      
+      const { token, user } = response.data;
+      
+      // Uložení tokenu do localStorage
+      localStorage.setItem('token', token);
+      setToken(token);
+      setUser(user);
+      
+      return user;
+    } catch (error) {
+      setError(error.response?.data?.message || 'Registrace se nezdařila.');
+      throw error;
+    }
+  };
+
+  // Funkce pro odhlášení
+  const logout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    setUser(null);
+  };
+
+  // Ověření existujícího tokenu a získání informací o uživateli
+  useEffect(() => {
+    const verifyToken = async () => {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        // Nastavení authorization hlavičky
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        
+        const response = await axios.get(`${API_URL}/auth/profile`);
+        setUser(response.data.user);
+      } catch (error) {
+        console.error('Chyba při ověřování tokenu:', error);
+        localStorage.removeItem('token');
+        setToken(null);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    verifyToken();
+  }, [token]);
+
+  // Přidání authorization hlavičky pro všechny požadavky
+  useEffect(() => {
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    } else {
+      delete axios.defaults.headers.common['Authorization'];
+    }
+  }, [token]);
+
+  // Vyexportování hodnot a funkcí kontextu
+  const value = {
+    user,
+    token,
+    isAuthenticated: !!user,
+    loading,
+    error,
+    login,
+    register,
+    logout
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+// Hook pro použití Auth kontextu
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth musí být použit uvnitř AuthProvider');
+  }
+  return context;
+};
