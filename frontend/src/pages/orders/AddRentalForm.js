@@ -1,20 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
+import { Container, Row, Col, Card, Form, Button, Alert, Table } from 'react-bootstrap';
+import { FaTrash, FaPlus } from 'react-icons/fa';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { API_URL, formatCurrency } from '../../config';
+import { API_URL, formatCurrency, formatDate } from '../../config';
 
 const AddRentalForm = () => {
   const { order_id } = useParams();
   const navigate = useNavigate();
   
+  // Stav pro celý formulář
   const [formData, setFormData] = useState({
-    equipment_id: '',
     issue_date: new Date().toISOString().split('T')[0],
     planned_return_date: '',
-    daily_rate: '',
-    status: 'created'
+    status: 'created',
+    note: ''
   });
+
+  // Stav pro seznam položek výpůjček
+  const [rentalItems, setRentalItems] = useState([{
+    equipment_id: '',
+    quantity: 1,
+    daily_rate: 0,
+    subtotal: 0
+  }]);
   
   const [equipment, setEquipment] = useState([]);
   const [order, setOrder] = useState(null);
@@ -22,6 +31,10 @@ const AddRentalForm = () => {
   const [error, setError] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   
+  // Výpočet celkové ceny
+  const [totalPrice, setTotalPrice] = useState(0);
+  
+  // Načtení dat zakázky a dostupného vybavení
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -32,7 +45,7 @@ const AddRentalForm = () => {
         // Načtení dostupného vybavení
         const equipmentResponse = await axios.get(`${API_URL}/equipment`);
         const availableEquipment = equipmentResponse.data.equipment.filter(
-          item => item.status === 'available'
+          item => item.status === 'available' && (item.total_stock > 0)
         );
         setEquipment(availableEquipment);
         
@@ -46,44 +59,215 @@ const AddRentalForm = () => {
     
     fetchData();
   }, [order_id]);
+
+  // Přepočet subtotal a celkové ceny při změně dat
+  useEffect(() => {
+    calculateTotals();
+  }, [rentalItems, formData.issue_date, formData.planned_return_date]);
+
+  // Výpočet počtu dní mezi datumy
+  const calculateDays = () => {
+    if (!formData.issue_date || !formData.planned_return_date) {
+      return 1; // Minimálně 1 den
+    }
+
+    const startDate = new Date(formData.issue_date);
+    const endDate = new Date(formData.planned_return_date);
+    const diffTime = Math.abs(endDate - startDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays || 1; // Minimálně 1 den
+  };
+
+  // Výpočet všech subtotals a celkové ceny
+  const calculateTotals = () => {
+    const days = calculateDays();
+    
+    // Aktualizace subtotals pro každou položku
+    const updatedItems = rentalItems.map(item => {
+      const subtotal = item.daily_rate * item.quantity * days;
+      return { ...item, subtotal };
+    });
+    
+    setRentalItems(updatedItems);
+    
+    // Výpočet celkové ceny
+    const total = updatedItems.reduce((sum, item) => sum + item.subtotal, 0);
+    setTotalPrice(total);
+  };
   
+  // Přidání nové položky do seznamu
+  const addRentalItem = () => {
+    setRentalItems([
+      ...rentalItems,
+      {
+        equipment_id: '',
+        quantity: 1,
+        daily_rate: 0,
+        subtotal: 0
+      }
+    ]);
+  };
+  
+  // Odstranění položky ze seznamu
+  const removeRentalItem = (index) => {
+    if (rentalItems.length <= 1) {
+      // Ponechat alespoň jednu položku
+      return;
+    }
+    
+    const newItems = rentalItems.filter((_, i) => i !== index);
+    setRentalItems(newItems);
+  };
+  
+  // Změna hodnoty v položce
+  const handleItemChange = (index, field, value) => {
+    const newItems = [...rentalItems];
+    
+    // Pokud se změnilo equipment_id, načteme denní sazbu
+    if (field === 'equipment_id') {
+      const selectedEquipment = equipment.find(eq => eq.id.toString() === value);
+      if (selectedEquipment) {
+        newItems[index] = {
+          ...newItems[index],
+          [field]: value,
+          daily_rate: selectedEquipment.daily_rate
+        };
+      } else {
+        newItems[index] = {
+          ...newItems[index],
+          [field]: value,
+          daily_rate: 0
+        };
+      }
+    } else if (field === 'quantity') {
+      // Zajistíme, že množství je vždy alespoň 1
+      const quantity = Math.max(1, parseInt(value) || 1);
+      
+      // Kontrola dostupnosti - omezíme množství podle skladových zásob
+      if (newItems[index].equipment_id) {
+        const selectedEquipment = equipment.find(eq => eq.id.toString() === newItems[index].equipment_id);
+        if (selectedEquipment && selectedEquipment.total_stock) {
+          const maxQuantity = parseInt(selectedEquipment.total_stock);
+          newItems[index] = {
+            ...newItems[index],
+            [field]: Math.min(quantity, maxQuantity) // Omezíme množství na maximum dostupných kusů
+          };
+        } else {
+          newItems[index] = {
+            ...newItems[index],
+            [field]: quantity
+          };
+        }
+      } else {
+        newItems[index] = {
+          ...newItems[index],
+          [field]: quantity
+        };
+      }
+    } else {
+      newItems[index] = {
+        ...newItems[index],
+        [field]: value
+      };
+    }
+    
+    setRentalItems(newItems);
+  };
+  
+  // Změna hodnoty v hlavním formuláři
   const handleChange = (e) => {
     const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+  
+  // Kontrola dostupnosti vybraného vybavení
+  const checkAvailability = (equipmentId, quantity) => {
+    const selectedEquipment = equipment.find(eq => eq.id.toString() === equipmentId);
+    if (!selectedEquipment) return false;
     
-    if (name === 'equipment_id') {
-      // Pokud se změnilo vybavení, aktualizujeme denní sazbu
-      const selectedEquipment = equipment.find(item => item.id.toString() === value);
-      if (selectedEquipment) {
-        setFormData(prev => ({ 
-          ...prev, 
-          [name]: value,
-          daily_rate: selectedEquipment.daily_rate 
-        }));
-        return;
+    // Kontrola, zda je dostatek kusů
+    if (selectedEquipment.total_stock && parseInt(selectedEquipment.total_stock) >= quantity) {
+      return true;
+    }
+    
+    return false;
+  };
+  
+  // Validace formuláře před odesláním
+  const validateForm = () => {
+    // Kontrola data
+    if (!formData.issue_date) {
+      setError('Datum vydání je povinné.');
+      return false;
+    }
+    
+    if (!formData.planned_return_date) {
+      setError('Plánované datum vrácení je povinné.');
+      return false;
+    }
+    
+    // Kontrola, že datum vrácení je po datu vydání
+    const issueDate = new Date(formData.issue_date);
+    const returnDate = new Date(formData.planned_return_date);
+    if (returnDate <= issueDate) {
+      setError('Datum vrácení musí být po datu vydání.');
+      return false;
+    }
+    
+    // Kontrola položek
+    for (let i = 0; i < rentalItems.length; i++) {
+      const item = rentalItems[i];
+      
+      if (!item.equipment_id) {
+        setError(`Položka #${i+1}: Vybavení musí být vybráno.`);
+        return false;
+      }
+      
+      if (item.quantity < 1) {
+        setError(`Položka #${i+1}: Množství musí být alespoň 1.`);
+        return false;
+      }
+      
+      // Kontrola dostupnosti
+      if (!checkAvailability(item.equipment_id, item.quantity)) {
+        setError(`Položka #${i+1}: Není dostatek kusů na skladě.`);
+        return false;
       }
     }
     
-    setFormData(prev => ({ 
-      ...prev, 
-      [name]: name === 'daily_rate' ? parseFloat(value) : value 
-    }));
+    return true;
   };
   
+  // Odeslání formuláře
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     setSaveSuccess(false);
     
-    // Vytvoření kopie dat s případnými úpravami
-    const dataToSend = {
-      ...formData,
-      equipment_id: parseInt(formData.equipment_id), // Zajistí, že ID je číslo
-      daily_rate: parseFloat(formData.daily_rate) // Zajistí, že sazba je číslo
-    };
-    
     try {
-      await axios.post(`${API_URL}/orders/${order_id}/rentals`, dataToSend);
+      // Vytvoření pole pro uložení jednotlivých výpůjček
+      const rentalsToSave = rentalItems.map(item => ({
+        order_id: parseInt(order_id),
+        equipment_id: parseInt(item.equipment_id),
+        quantity: parseInt(item.quantity),
+        issue_date: formData.issue_date,
+        planned_return_date: formData.planned_return_date,
+        daily_rate: parseFloat(item.daily_rate),
+        status: formData.status,
+        note: formData.note
+      }));
+      
+      // Postupné ukládání jednotlivých výpůjček
+      for (const rental of rentalsToSave) {
+        await axios.post(`${API_URL}/orders/${order_id}/rentals`, rental);
+      }
       
       setSaveSuccess(true);
       
@@ -93,12 +277,20 @@ const AddRentalForm = () => {
       }, 1500);
     } catch (error) {
       console.error('Chyba při přidání výpůjčky:', error);
-      // Zobrazení detailnější chybové zprávy
-      setError(error.response?.data?.message || (error.response?.data?.error ? 
-        `Chyba: ${error.response.data.error}` : 'Chyba při přidání výpůjčky'));
+      setError(error.response?.data?.message || 'Chyba při přidání výpůjčky.');
     } finally {
       setLoading(false);
     }
+  };
+  
+  // Získání informací o dostupných kusech vybraného vybavení
+  const getAvailabilityInfo = (equipmentId) => {
+    if (!equipmentId) return '';
+    
+    const selectedEquipment = equipment.find(eq => eq.id.toString() === equipmentId);
+    if (!selectedEquipment) return '';
+    
+    return `K dispozici: ${selectedEquipment.total_stock || 0} ks`;
   };
   
   if (loading) {
@@ -113,6 +305,13 @@ const AddRentalForm = () => {
     return (
       <Container>
         <Alert variant="danger">{error}</Alert>
+        <Button 
+          as={Link} 
+          to={`/orders/${order_id}`} 
+          variant="outline-secondary"
+        >
+          Zpět na zakázku
+        </Button>
       </Container>
     );
   }
@@ -121,9 +320,18 @@ const AddRentalForm = () => {
     return (
       <Container>
         <Alert variant="warning">Zakázka nebyla nalezena.</Alert>
+        <Button 
+          as={Link} 
+          to="/orders" 
+          variant="outline-secondary"
+        >
+          Zpět na seznam zakázek
+        </Button>
       </Container>
     );
   }
+  
+  const days = calculateDays();
   
   return (
     <Container>
@@ -138,56 +346,22 @@ const AddRentalForm = () => {
       {error && <Alert variant="danger">{error}</Alert>}
       {saveSuccess && <Alert variant="success">Výpůjčka byla úspěšně přidána.</Alert>}
       
-      <Card>
+      <Card className="mb-4">
+        <Card.Header>
+          <h5 className="mb-0">Základní informace</h5>
+        </Card.Header>
         <Card.Body>
           <Form onSubmit={handleSubmit}>
             <Row>
               <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Vybavení *</Form.Label>
-                  <Form.Select
-                    name="equipment_id"
-                    value={formData.equipment_id}
-                    onChange={handleChange}
-                    required
-                    disabled={loading || equipment.length === 0}
-                  >
-                    <option value="">Vyberte vybavení</option>
-                    {equipment.map(item => (
-                      <option key={item.id} value={item.id}>
-                        {item.name} - {item.inventory_number} ({formatCurrency(item.daily_rate)}/den)
-                      </option>
-                    ))}
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-              
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Denní sazba (Kč) *</Form.Label>
-                  <Form.Control
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    name="daily_rate"
-                    value={formData.daily_rate}
-                    onChange={handleChange}
-                    required
-                    disabled={loading}
-                  />
-                </Form.Group>
-              </Col>
-            </Row>
-            
-            <Row>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Datum vydání</Form.Label>
+                  <Form.Label>Datum vydání *</Form.Label>
                   <Form.Control
                     type="date"
                     name="issue_date"
                     value={formData.issue_date}
                     onChange={handleChange}
+                    required
                     disabled={loading}
                   />
                 </Form.Group>
@@ -195,12 +369,13 @@ const AddRentalForm = () => {
               
               <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Plánované datum vrácení</Form.Label>
+                  <Form.Label>Plánované datum vrácení *</Form.Label>
                   <Form.Control
                     type="date"
                     name="planned_return_date"
                     value={formData.planned_return_date}
                     onChange={handleChange}
+                    required
                     disabled={loading}
                   />
                 </Form.Group>
@@ -222,7 +397,110 @@ const AddRentalForm = () => {
                   </Form.Select>
                 </Form.Group>
               </Col>
+              
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Poznámka</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={1}
+                    name="note"
+                    value={formData.note}
+                    onChange={handleChange}
+                    disabled={loading}
+                    placeholder="Poznámka k výpůjčce"
+                  />
+                </Form.Group>
+              </Col>
             </Row>
+            
+            <div className="mb-3">
+              <h5>Seznam vypůjčených položek</h5>
+              <p className="text-muted">Počet dní: {days} {days === 1 ? 'den' : days >= 2 && days <= 4 ? 'dny' : 'dní'}</p>
+            </div>
+            
+            <Table striped bordered hover responsive>
+              <thead>
+                <tr>
+                  <th style={{ width: '40%' }}>Vybavení</th>
+                  <th style={{ width: '15%' }}>Množství</th>
+                  <th style={{ width: '15%' }}>Denní sazba</th>
+                  <th style={{ width: '20%' }}>Celkem</th>
+                  <th style={{ width: '10%' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rentalItems.map((item, index) => (
+                  <tr key={index}>
+                    <td>
+                      <Form.Select
+                        value={item.equipment_id}
+                        onChange={(e) => handleItemChange(index, 'equipment_id', e.target.value)}
+                        required
+                        disabled={loading}
+                      >
+                        <option value="">Vyberte vybavení</option>
+                        {equipment.map(eq => (
+                          <option key={eq.id} value={eq.id}>
+                            {eq.name} - {eq.inventory_number} ({formatCurrency(eq.daily_rate)}/den)
+                          </option>
+                        ))}
+                      </Form.Select>
+                      <small className="text-muted">{getAvailabilityInfo(item.equipment_id)}</small>
+                    </td>
+                    <td>
+                      <Form.Control
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                        required
+                        disabled={loading}
+                      />
+                    </td>
+                    <td>
+                      {formatCurrency(item.daily_rate)}
+                    </td>
+                    <td>
+                      {formatCurrency(item.subtotal)}
+                    </td>
+                    <td className="text-center">
+                      <Button
+                        variant="outline-danger"
+                        size="sm"
+                        onClick={() => removeRentalItem(index)}
+                        disabled={loading || rentalItems.length <= 1}
+                      >
+                        <FaTrash />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan="5">
+                    <Button
+                      variant="outline-primary"
+                      size="sm"
+                      onClick={addRentalItem}
+                      disabled={loading}
+                    >
+                      <FaPlus /> Přidat položku
+                    </Button>
+                  </td>
+                </tr>
+                <tr>
+                  <td colSpan="3" className="text-end">
+                    <strong>Celkem:</strong>
+                  </td>
+                  <td>
+                    <strong>{formatCurrency(totalPrice)}</strong>
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </Table>
             
             <div className="d-flex justify-content-end gap-2 mt-3">
               <Button 

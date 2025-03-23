@@ -111,7 +111,6 @@ export const AuthProvider = ({ children }) => {
       response => response,
       error => {
         if (error.response && error.response.status === 401) {
-          // Při neplatném tokenu automaticky odhlásíme uživatele
           if (token) {
             console.warn('Detekován neplatný token, odhlašuji...');
             logout();
@@ -120,12 +119,11 @@ export const AuthProvider = ({ children }) => {
         return Promise.reject(error);
       }
     );
-
+  
     return () => {
-      // Odstranění interceptoru při unmount
       axios.interceptors.response.eject(interceptor);
     };
-  }, [token]);
+  }, [token, logout]);  // Přidaný logout do závislostí
 
   // Vyexportování hodnot a funkcí kontextu
   const value = {
