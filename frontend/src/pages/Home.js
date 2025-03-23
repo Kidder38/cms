@@ -71,7 +71,8 @@ const Home = () => {
           <Card>
             <Card.Body>
               <Card.Title>Jak to funguje?</Card.Title>
-              <Card.Text>
+              {/* OPRAVA: Odstranění <p> tagu kolem <ol> seznamu */}
+              <div className="card-text">
                 <ol>
                   <li>Zaregistrujte se a vytvořte si účet</li>
                   <li>Projděte si náš katalog a vyberte potřebné vybavení</li>
@@ -79,7 +80,7 @@ const Home = () => {
                   <li>Vyzvedněte si vybavení v naší provozovně</li>
                   <li>Po dokončení projektu vybavení vraťte</li>
                 </ol>
-              </Card.Text>
+              </div>
             </Card.Body>
           </Card>
         </Col>

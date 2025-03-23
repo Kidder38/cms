@@ -8,8 +8,8 @@ router.get('/', equipmentController.getAllEquipment);
 router.get('/:id', equipmentController.getEquipmentById);
 
 // Chráněné routy (jen pro administrátory)
-router.post('/', verifyToken, isAdmin, equipmentController.createEquipment);
-router.put('/:id', verifyToken, isAdmin, equipmentController.updateEquipment);
+router.post('/', verifyToken, isAdmin, equipmentController.uploadPhoto, equipmentController.createEquipment);
+router.put('/:id', verifyToken, isAdmin, equipmentController.uploadPhoto, equipmentController.updateEquipment);
 router.delete('/:id', verifyToken, isAdmin, equipmentController.deleteEquipment);
 
 module.exports = router;

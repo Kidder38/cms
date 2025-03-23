@@ -29,17 +29,26 @@ CREATE TABLE IF NOT EXISTS equipment_categories (
 );
 
 -- Vybavení
+-- Vybavení - upravená struktura
 CREATE TABLE IF NOT EXISTS equipment (
   id SERIAL PRIMARY KEY,
   name VARCHAR(200) NOT NULL,
   category_id INTEGER REFERENCES equipment_categories(id),
-  inventory_number VARCHAR(50) UNIQUE NOT NULL,
-  purchase_price DECIMAL(10, 2),
-  daily_rate DECIMAL(10, 2) NOT NULL,
-  status VARCHAR(20) DEFAULT 'available', -- available, borrowed, maintenance, retired
-  location VARCHAR(100),
-  description TEXT,
-  photo_url VARCHAR(255),
+  inventory_number VARCHAR(50) UNIQUE NOT NULL,  -- Stávající inventární číslo
+  article_number VARCHAR(50),                    -- Nové: Číslo artiklu
+  product_designation VARCHAR(200),              -- Nové: Označení výrobku
+  purchase_price DECIMAL(10, 2),                 -- Stávající pořizovací cena
+  material_value DECIMAL(10, 2),                 -- Nové: Hodnota materiálu (sleva 15% z nového)
+  daily_rate DECIMAL(10, 2) NOT NULL,            -- Stávající denní sazba
+  monthly_rate DECIMAL(10, 2),                   -- Nové: Nájem/měsíc/kus
+  weight_per_piece DECIMAL(10, 2),               -- Nové: Hmotnost/kus/kg
+  square_meters_per_piece DECIMAL(10, 2),        -- Nové: m2/ks
+  total_stock INTEGER,                           -- Nové: Sklad celkem
+  total_square_meters DECIMAL(10, 2),            -- Nové: m2/celkem
+  status VARCHAR(20) DEFAULT 'available',        -- Stávající stav
+  location VARCHAR(100),                         -- Stávající umístění
+  description TEXT,                              -- Stávající popis
+  photo_url VARCHAR(255),                        -- Stávající URL fotografie
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

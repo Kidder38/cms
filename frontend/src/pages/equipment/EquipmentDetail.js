@@ -120,6 +120,12 @@ const EquipmentDetail = () => {
                 <strong>Inventární číslo:</strong> {equipment.inventory_number}
               </ListGroup.Item>
               <ListGroup.Item>
+                <strong>Číslo artiklu:</strong> {equipment.article_number || 'Neuvedeno'}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <strong>Označení výrobku:</strong> {equipment.product_designation || 'Neuvedeno'}
+              </ListGroup.Item>
+              <ListGroup.Item>
                 <strong>Kategorie:</strong> {equipment.category_name}
               </ListGroup.Item>
               <ListGroup.Item>
@@ -134,7 +140,7 @@ const EquipmentDetail = () => {
             </ListGroup>
           </Card>
           
-          <Card>
+          <Card className="mb-4">
             <Card.Header>
               <h5 className="mb-0">Finanční informace</h5>
             </Card.Header>
@@ -143,7 +149,35 @@ const EquipmentDetail = () => {
                 <strong>Denní sazba:</strong> {formatCurrency(equipment.daily_rate)}
               </ListGroup.Item>
               <ListGroup.Item>
+                <strong>Měsíční sazba:</strong> {formatCurrency(equipment.monthly_rate) || 'Neuvedeno'}
+              </ListGroup.Item>
+              <ListGroup.Item>
                 <strong>Pořizovací cena:</strong> {formatCurrency(equipment.purchase_price) || 'Neuvedeno'}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <strong>Hodnota materiálu:</strong> {formatCurrency(equipment.material_value) || 'Neuvedeno'}
+              </ListGroup.Item>
+            </ListGroup>
+          </Card>
+        </Col>
+        
+        <Col md={6}>
+          <Card className="mb-4">
+            <Card.Header>
+              <h5 className="mb-0">Technické informace</h5>
+            </Card.Header>
+            <ListGroup variant="flush">
+              <ListGroup.Item>
+                <strong>Hmotnost/kus:</strong> {equipment.weight_per_piece ? `${equipment.weight_per_piece} kg` : 'Neuvedeno'}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <strong>m2/ks:</strong> {equipment.square_meters_per_piece || 'Neuvedeno'}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <strong>Sklad celkem:</strong> {equipment.total_stock || 'Neuvedeno'}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <strong>m2/celkem:</strong> {equipment.total_square_meters || 'Neuvedeno'}
               </ListGroup.Item>
               <ListGroup.Item>
                 <strong>Přidáno dne:</strong> {formatDate(equipment.created_at)}
@@ -153,9 +187,7 @@ const EquipmentDetail = () => {
               </ListGroup.Item>
             </ListGroup>
           </Card>
-        </Col>
-        
-        <Col md={6}>
+          
           <Card className="mb-4">
             <Card.Header>
               <h5 className="mb-0">Popis</h5>

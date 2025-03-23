@@ -3,7 +3,24 @@ const db = require('../config/db.config');
 // Získání všech kategorií vybavení
 exports.getAllCategories = async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM equipment_categories ORDER BY name ASC');
+    // Upravený dotaz, který pro každou kategorii načítá i počet položek vybavení
+    const result = await db.query(`
+      SELECT 
+        c.id, 
+        c.name, 
+        c.description, 
+        c.created_at, 
+        c.updated_at,
+        COUNT(e.id) AS item_count 
+      FROM 
+        equipment_categories c
+      LEFT JOIN 
+        equipment e ON c.id = e.category_id
+      GROUP BY 
+        c.id
+      ORDER BY 
+        c.name ASC
+    `);
     
     res.status(200).json({
       count: result.rows.length,
@@ -20,7 +37,24 @@ exports.getCategoryById = async (req, res) => {
   const { id } = req.params;
   
   try {
-    const result = await db.query('SELECT * FROM equipment_categories WHERE id = $1', [id]);
+    // Načtení kategorie včetně počtu položek
+    const result = await db.query(`
+      SELECT 
+        c.id, 
+        c.name, 
+        c.description, 
+        c.created_at, 
+        c.updated_at,
+        COUNT(e.id) AS item_count 
+      FROM 
+        equipment_categories c
+      LEFT JOIN 
+        equipment e ON c.id = e.category_id
+      WHERE 
+        c.id = $1
+      GROUP BY 
+        c.id
+    `, [id]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Kategorie nenalezena.' });
@@ -49,9 +83,12 @@ exports.createCategory = async (req, res) => {
       [name, description]
     );
     
+    // Přidáme item_count s hodnotou 0 pro nově vytvořenou kategorii
+    const newCategory = { ...result.rows[0], item_count: "0" };
+    
     res.status(201).json({
       message: 'Kategorie byla úspěšně vytvořena.',
-      category: result.rows[0]
+      category: newCategory
     });
   } catch (error) {
     console.error('Chyba při vytváření kategorie:', error);
@@ -80,9 +117,16 @@ exports.updateCategory = async (req, res) => {
       [name, description, id]
     );
     
+    // Získání počtu položek pro aktualizovanou kategorii
+    const countResult = await db.query('SELECT COUNT(*) FROM equipment WHERE category_id = $1', [id]);
+    const item_count = countResult.rows[0].count;
+    
+    // Přidání počtu položek do odpovědi
+    const updatedCategory = { ...result.rows[0], item_count };
+    
     res.status(200).json({
       message: 'Kategorie byla úspěšně aktualizována.',
-      category: result.rows[0]
+      category: updatedCategory
     });
   } catch (error) {
     console.error('Chyba při aktualizaci kategorie:', error);

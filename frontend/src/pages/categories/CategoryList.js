@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Table, Button, Alert, InputGroup, Form } from 'react-bootstrap';
+import { Container, Row, Col, Card, Table, Button, Alert, InputGroup, Form, Modal } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { API_URL } from '../../config';
@@ -12,21 +12,72 @@ const CategoryList = () => {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   
+  // Stav pro modální okno při mazání
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  
+  const fetchCategories = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_URL}/categories`);
+      setCategories(response.data.categories);
+      setError(null);
+    } catch (error) {
+      console.error('Chyba při načítání kategorií:', error);
+      setError('Nepodařilo se načíst kategorie. Zkuste to prosím později.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await axios.get(`${API_URL}/categories`);
-        setCategories(response.data.categories);
-        setLoading(false);
-      } catch (error) {
-        console.error('Chyba při načítání kategorií:', error);
-        setError('Nepodařilo se načíst kategorie. Zkuste to prosím později.');
-        setLoading(false);
-      }
-    };
-    
     fetchCategories();
   }, []);
+  
+  // Funkce pro otevření modálního okna s potvrzením smazání
+  const handleDeleteClick = (category) => {
+    setCategoryToDelete(category);
+    setShowDeleteModal(true);
+    setDeleteError(null);
+  };
+  
+  // Funkce pro zavření modálního okna
+  const handleCloseModal = () => {
+    setShowDeleteModal(false);
+    setCategoryToDelete(null);
+    setDeleteError(null);
+  };
+  
+  // Funkce pro smazání kategorie
+  const handleDelete = async () => {
+    if (!categoryToDelete) return;
+    
+    setDeleting(true);
+    setDeleteError(null);
+    
+    try {
+      await axios.delete(`${API_URL}/categories/${categoryToDelete.id}`);
+      
+      // Aktualizace seznamu kategorií po úspěšném smazání
+      setCategories(prevCategories => 
+        prevCategories.filter(cat => cat.id !== categoryToDelete.id)
+      );
+      
+      // Zavření modálního okna
+      setShowDeleteModal(false);
+      setCategoryToDelete(null);
+    } catch (error) {
+      console.error('Chyba při mazání kategorie:', error);
+      setDeleteError(
+        error.response?.data?.message || 
+        'Chyba při mazání kategorie. Zkuste to prosím později.'
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
   
   // Filtrované kategorie podle vyhledávání
   const filteredCategories = categories.filter(category =>
@@ -115,14 +166,25 @@ const CategoryList = () => {
                       </Button>
                       
                       {user?.role === 'admin' && (
-                        <Button 
-                          as={Link} 
-                          to={`/categories/edit/${category.id}`} 
-                          variant="outline-secondary" 
-                          size="sm"
-                        >
-                          Upravit
-                        </Button>
+                        <>
+                          <Button 
+                            as={Link} 
+                            to={`/categories/edit/${category.id}`} 
+                            variant="outline-secondary" 
+                            size="sm"
+                            className="me-1"
+                          >
+                            Upravit
+                          </Button>
+                          
+                          <Button 
+                            variant="outline-danger" 
+                            size="sm"
+                            onClick={() => handleDeleteClick(category)}
+                          >
+                            Smazat
+                          </Button>
+                        </>
                       )}
                     </td>
                   </tr>
@@ -132,6 +194,36 @@ const CategoryList = () => {
           )}
         </Card.Body>
       </Card>
+      
+      {/* Modální okno pro potvrzení smazání kategorie */}
+      <Modal show={showDeleteModal} onHide={handleCloseModal}>
+        <Modal.Header closeButton>
+          <Modal.Title>Smazat kategorii</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {deleteError ? (
+            <Alert variant="danger">{deleteError}</Alert>
+          ) : (
+            <p>
+              Opravdu chcete smazat kategorii <strong>{categoryToDelete?.name}</strong>?
+              {' '}
+              Tuto akci nelze vrátit zpět.
+            </p>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseModal}>
+            Zrušit
+          </Button>
+          <Button 
+            variant="danger" 
+            onClick={handleDelete} 
+            disabled={deleting}
+          >
+            {deleting ? 'Mazání...' : 'Smazat'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Container>
   );
 };
