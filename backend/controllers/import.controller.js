@@ -75,24 +75,40 @@ exports.importEquipment = async (req, res) => {
           continue;
         }
 
-        // Vložení nové položky do databáze
+        // Vložení nové položky do databáze s rozšířenými parametry
         await db.query(`
           INSERT INTO equipment (
             name, 
             category_id, 
             inventory_number, 
+            article_number,
+            product_designation,
             purchase_price, 
+            material_value,
             daily_rate, 
+            monthly_rate,
+            weight_per_piece,
+            square_meters_per_piece,
+            total_stock,
+            total_square_meters,
             status, 
             location, 
             description
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         `, [
           item.name,
           categoryId,
           item.inventory_number,
+          item.article_number || null,
+          item.product_designation || null,
           item.purchase_price || null,
+          item.material_value || null,
           item.daily_rate,
+          item.monthly_rate || null,
+          item.weight_per_piece || null,
+          item.square_meters_per_piece || null,
+          item.total_stock || null,
+          item.total_square_meters || null,
           item.status || 'available',
           item.location || null,
           item.description || null
@@ -119,33 +135,67 @@ exports.importEquipment = async (req, res) => {
   }
 };
 
-// Funkce pro vytvoření vzorového Excel souboru
+// Funkce pro vytvoření vzorového Excel souboru - rozšířená o všechny parametry
 exports.getSampleExcelTemplate = (req, res) => {
   try {
     // Vytvoření nového workbooku
     const workbook = xlsx.utils.book_new();
     
-    // Definice dat
+    // Definice dat s více sloupci podle modelu
     const sampleData = [
       {
         name: 'Příklad vrtačky',
         inventory_number: 'INV001',
         category_name: 'Elektrické nářadí',
+        article_number: 'ART123',
+        product_designation: 'Vrtačka s příklepem',
         purchase_price: 5000,
+        material_value: 4250, // 85% z pořizovací ceny
         daily_rate: 200,
+        monthly_rate: 4000,
+        weight_per_piece: 2.5,
+        square_meters_per_piece: 0,
+        total_stock: 5,
+        total_square_meters: 0,
         status: 'available',
         location: 'Sklad A',
-        description: 'Popis vybavení'
+        description: 'Profesionální vrtačka s příklepem'
       },
       {
         name: 'Příklad pily',
         inventory_number: 'INV002',
         category_name: 'Elektrické nářadí',
+        article_number: 'ART456',
+        product_designation: 'Okružní pila',
         purchase_price: 3500,
+        material_value: 2975, // 85% z pořizovací ceny
         daily_rate: 150,
+        monthly_rate: 3000,
+        weight_per_piece: 3.2,
+        square_meters_per_piece: 0,
+        total_stock: 3,
+        total_square_meters: 0,
         status: 'available',
         location: 'Sklad B',
-        description: 'Popis dalšího vybavení'
+        description: 'Okružní pila se třemi náhradními kotouči'
+      },
+      {
+        name: 'Lešení rámové',
+        inventory_number: 'INV003',
+        category_name: 'Lešení',
+        article_number: 'LS789',
+        product_designation: 'Rámové lešení standard',
+        purchase_price: 15000,
+        material_value: 12750,
+        daily_rate: 350,
+        monthly_rate: 7000,
+        weight_per_piece: 25,
+        square_meters_per_piece: 4.5,
+        total_stock: 10,
+        total_square_meters: 45, // vypočítáno jako square_meters_per_piece * total_stock
+        status: 'available',
+        location: 'Sklad C',
+        description: 'Standardní rámové lešení pro stavební práce'
       }
     ];
     
