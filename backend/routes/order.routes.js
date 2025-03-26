@@ -28,4 +28,8 @@ router.post('/:order_id/billing-data', verifyToken, isAdmin, rentalController.ge
 router.get('/:order_id/billing-data', verifyToken, rentalController.getBillingDataByOrder);
 router.get('/:order_id/billing-data/:billing_id', verifyToken, rentalController.getBillingDataById);
 
+// Routy pro dodací listy výpůjček a vratek
+router.get('/rentals/:rental_id/delivery-note', verifyToken, rentalController.generateRentalDeliveryNote);
+router.get('/returns/:return_id/delivery-note', verifyToken, rentalController.generateReturnDeliveryNote);
+
 module.exports = router;

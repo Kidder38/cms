@@ -750,3 +750,103 @@ exports.getBillingDataById = async (req, res) => {
     res.status(500).json({ message: 'Chyba serveru při načítání fakturačního podkladu.' });
   }
 };
+// Generování dodacího listu pro konkrétní výpůjčku
+exports.generateRentalDeliveryNote = async (req, res) => {
+  const { rental_id } = req.params;
+  
+  try {
+    // Načtení výpůjčky včetně informací o zakázce a zákazníkovi
+    const rentalResult = await db.query(`
+      SELECT r.*, e.name as equipment_name, e.inventory_number, 
+             e.article_number, e.product_designation,
+             o.order_number, o.customer_id,
+             c.name as customer_name, c.address as customer_address, 
+             c.ico, c.dic, c.email as customer_email, c.phone as customer_phone
+      FROM rentals r
+      JOIN equipment e ON r.equipment_id = e.id
+      JOIN orders o ON r.order_id = o.id
+      JOIN customers c ON o.customer_id = c.id
+      WHERE r.id = $1
+    `, [rental_id]);
+    
+    if (rentalResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Výpůjčka nenalezena.' });
+    }
+    
+    const rental = rentalResult.rows[0];
+    
+    // Vytvoření struktury pro dodací list výpůjčky
+    const deliveryNote = {
+      rental: rental,
+      order_number: rental.order_number,
+      customer_name: rental.customer_name,
+      customer_address: rental.customer_address,
+      customer_ico: rental.ico,
+      customer_dic: rental.dic,
+      customer_email: rental.customer_email,
+      customer_phone: rental.customer_phone,
+      created_at: new Date(),
+      delivery_note_number: `DLV-${rental.id}-${new Date().toISOString().split('T')[0].replace(/-/g, '')}`,
+    };
+    
+    res.status(200).json({
+      message: 'Dodací list pro výpůjčku byl úspěšně vygenerován.',
+      deliveryNote
+    });
+  } catch (error) {
+    console.error('Chyba při generování dodacího listu pro výpůjčku:', error);
+    res.status(500).json({ message: 'Chyba serveru při generování dodacího listu pro výpůjčku.' });
+  }
+};
+
+// Generování dodacího listu pro vratku
+exports.generateReturnDeliveryNote = async (req, res) => {
+  const { return_id } = req.params;
+  
+  try {
+    // Načtení vratky včetně informací o výpůjčce, zakázce a zákazníkovi
+    const returnResult = await db.query(`
+      SELECT ret.*, r.equipment_id, r.issue_date, r.order_id, r.quantity as original_quantity,
+             e.name as equipment_name, e.inventory_number, 
+             e.article_number, e.product_designation,
+             o.order_number, o.customer_id,
+             c.name as customer_name, c.address as customer_address, 
+             c.ico, c.dic, c.email as customer_email, c.phone as customer_phone
+      FROM returns ret
+      JOIN rentals r ON ret.rental_id = r.id
+      JOIN equipment e ON r.equipment_id = e.id
+      JOIN orders o ON r.order_id = o.id
+      JOIN customers c ON o.customer_id = c.id
+      WHERE ret.id = $1
+    `, [return_id]);
+    
+    if (returnResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Vratka nenalezena.' });
+    }
+    
+    const returnData = returnResult.rows[0];
+    
+    // Vytvoření struktury pro dodací list vratky
+    const deliveryNote = {
+      return: returnData,
+      rental_id: returnData.rental_id,
+      order_number: returnData.order_number,
+      customer_name: returnData.customer_name,
+      customer_address: returnData.customer_address,
+      customer_ico: returnData.ico,
+      customer_dic: returnData.dic,
+      customer_email: returnData.customer_email,
+      customer_phone: returnData.customer_phone,
+      created_at: new Date(),
+      delivery_note_number: `RTN-${returnData.id}-${new Date().toISOString().split('T')[0].replace(/-/g, '')}`,
+    };
+    
+    res.status(200).json({
+      message: 'Dodací list pro vratku byl úspěšně vygenerován.',
+      deliveryNote
+    });
+  } catch (error) {
+    console.error('Chyba při generování dodacího listu pro vratku:', error);
+    res.status(500).json({ message: 'Chyba serveru při generování dodacího listu pro vratku.' });
+  }
+};

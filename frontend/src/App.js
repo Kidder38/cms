@@ -26,9 +26,11 @@ import OrderDetail from './pages/orders/OrderDetail';
 import OrderForm from './pages/orders/OrderForm';
 import AddRentalForm from './pages/orders/AddRentalForm';
 
-// Nové komponenty
+// Dokumenty
 import DeliveryNote from './pages/orders/DeliveryNote';
 import BillingData from './pages/orders/BillingData';
+import RentalDeliveryNote from './pages/orders/RentalDeliveryNote';
+import ReturnDeliveryNote from './pages/orders/ReturnDeliveryNote';
 
 // Kontext pro autentizaci
 import { AuthProvider } from './context/AuthContext';
@@ -66,9 +68,13 @@ function App() {
                 <Route path="/orders/edit/:id" element={<OrderForm />} />
                 <Route path="/orders/:order_id/add-rental" element={<AddRentalForm />} />
 
-                {/* Nové cesty pro dodací listy a fakturační podklady */}
+                {/* Dodací listy a faktury */}
                 <Route path="/orders/:order_id/delivery-note" element={<DeliveryNote />} />
                 <Route path="/orders/:order_id/billing-data" element={<BillingData />} />
+                
+                {/* Nové cesty pro dodací listy výpůjček a vratek */}
+                <Route path="/rentals/:rental_id/delivery-note" element={<RentalDeliveryNote />} />
+                <Route path="/returns/:return_id/delivery-note" element={<ReturnDeliveryNote />} />
 
                 {/* Chybějící stránka */}
                 <Route path="*" element={<Navigate to="/" />} />

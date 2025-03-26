@@ -1,170 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Badge, ListGroup, Alert, Table, Modal } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Badge, ListGroup, Alert, Table } from 'react-bootstrap';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { FaFileInvoiceDollar, FaFileAlt, FaPlus, FaEdit, FaTrash, FaArrowLeft, FaUndo } from 'react-icons/fa';
 import axios from 'axios';
 import { API_URL, formatDate, formatCurrency, ORDER_STATUS, RENTAL_STATUS } from '../../config';
 import { useAuth } from '../../context/AuthContext';
-
-const RentalReturnModal = ({ show, onHide, rental, onReturn }) => {
-  const [formData, setFormData] = useState({
-    actual_return_date: new Date().toISOString().split('T')[0],
-    condition: 'ok',
-    damage_description: '',
-    additional_charges: 0,
-    return_quantity: rental ? rental.quantity : 1,
-    notes: ''
-  });
-  
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  
-  // Aktualizace hodnot při změně vybrané výpůjčky
-  useEffect(() => {
-    if (rental) {
-      setFormData(prev => ({
-        ...prev,
-        return_quantity: rental.quantity || 1
-      }));
-    }
-  }, [rental]);
-  
-  const handleChange = (e) => {
-    const { name, value, type } = e.target;
-    setFormData({
-      ...formData,
-      [name]: type === 'number' ? parseFloat(value) : value
-    });
-  };
-  
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    
-    try {
-      await onReturn(rental.id, formData);
-      onHide();
-    } catch (error) {
-      console.error('Chyba při vracení výpůjčky:', error);
-      setError(error.response?.data?.message || 'Chyba při vracení výpůjčky.');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  return (
-    <Modal show={show} onHide={onHide} centered>
-      <Modal.Header closeButton>
-        <Modal.Title>Vrácení výpůjčky</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        {error && <Alert variant="danger">{error}</Alert>}
-        
-        {rental && (
-          <form onSubmit={handleSubmit}>
-            <div className="mb-3">
-              <label className="form-label">Vybavení</label>
-              <input
-                type="text"
-                className="form-control"
-                value={`${rental.equipment_name} (${rental.inventory_number})`}
-                disabled
-              />
-            </div>
-            
-            <div className="mb-3">
-              <label className="form-label">Datum vrácení</label>
-              <input
-                type="date"
-                className="form-control"
-                name="actual_return_date"
-                value={formData.actual_return_date}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            
-            <div className="mb-3">
-              <label className="form-label">Množství k vrácení</label>
-              <input
-                type="number"
-                className="form-control"
-                name="return_quantity"
-                value={formData.return_quantity}
-                onChange={handleChange}
-                min="1"
-                max={rental.quantity}
-                required
-              />
-              <div className="form-text">Původně vypůjčeno: {rental.quantity} ks</div>
-            </div>
-            
-            <div className="mb-3">
-              <label className="form-label">Stav</label>
-              <select
-                className="form-select"
-                name="condition"
-                value={formData.condition}
-                onChange={handleChange}
-              >
-                <option value="ok">V pořádku</option>
-                <option value="damaged">Poškozeno</option>
-                <option value="missing">Chybí</option>
-              </select>
-            </div>
-            
-            {formData.condition !== 'ok' && (
-              <div className="mb-3">
-                <label className="form-label">Popis poškození</label>
-                <textarea
-                  className="form-control"
-                  name="damage_description"
-                  value={formData.damage_description}
-                  onChange={handleChange}
-                  rows="3"
-                  required={formData.condition !== 'ok'}
-                ></textarea>
-              </div>
-            )}
-            
-            <div className="mb-3">
-              <label className="form-label">Dodatečné poplatky (Kč)</label>
-              <input
-                type="number"
-                className="form-control"
-                name="additional_charges"
-                value={formData.additional_charges}
-                onChange={handleChange}
-                min="0"
-                step="0.01"
-              />
-            </div>
-            
-            <div className="mb-3">
-              <label className="form-label">Poznámky</label>
-              <textarea
-                className="form-control"
-                name="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                rows="2"
-              ></textarea>
-            </div>
-          </form>
-        )}
-      </Modal.Body>
-      <Modal.Footer>
-        <Button variant="secondary" onClick={onHide} disabled={loading}>
-          Zrušit
-        </Button>
-        <Button variant="primary" onClick={handleSubmit} disabled={loading}>
-          {loading ? 'Zpracování...' : 'Potvrdit vrácení'}
-        </Button>
-      </Modal.Footer>
-    </Modal>
-  );
-};
+import RentalReturnModal from './RentalReturnModal';
 
 const OrderDetail = () => {
   const { id } = useParams();
@@ -243,10 +84,12 @@ const OrderDetail = () => {
   // Zpracování vrácení výpůjčky
   const handleReturnRental = async (rentalId, returnData) => {
     try {
-      await axios.post(`${API_URL}/orders/${id}/rentals/${rentalId}/return`, returnData);
+      const response = await axios.post(`${API_URL}/orders/${id}/rentals/${rentalId}/return`, returnData);
       
       // Aktualizace dat po úspěšném vrácení
       fetchOrderDetail();
+      
+      return response.data; // Vracíme data odpovědi pro získání ID vratky
     } catch (error) {
       console.error('Chyba při vracení výpůjčky:', error);
       throw error;
@@ -472,16 +315,30 @@ const OrderDetail = () => {
                           </Badge>
                         </td>
                         <td>
-                          {user?.role === 'admin' && rental.status !== 'returned' && order.status !== 'completed' && (
+                          <div className="d-flex gap-1">
+                            {/* Tlačítko pro dodací list výpůjčky */}
                             <Button
-                              variant="outline-primary"
+                              as={Link}
+                              to={`/rentals/${rental.id}/delivery-note`}
+                              variant="outline-info"
                               size="sm"
-                              onClick={() => handleReturnClick(rental)}
-                              title="Vrátit výpůjčku"
+                              title="Dodací list výpůjčky"
                             >
-                              <FaUndo />
+                              <FaFileAlt />
                             </Button>
-                          )}
+                            
+                            {/* Tlačítko pro vrácení výpůjčky */}
+                            {user?.role === 'admin' && rental.status !== 'returned' && order.status !== 'completed' && (
+                              <Button
+                                variant="outline-primary"
+                                size="sm"
+                                onClick={() => handleReturnClick(rental)}
+                                title="Vrátit výpůjčku"
+                              >
+                                <FaUndo />
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
