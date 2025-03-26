@@ -1,6 +1,6 @@
 const db = require('../config/db.config');
 
-// Přidání výpůjčky k zakázce s podporou pro množství kusů
+// Přidání výpůjčky k zakázce s podporou pro množství kusů a batch_id
 exports.addRental = async (req, res) => {
   let { order_id } = req.params;
   let { 
@@ -10,7 +10,8 @@ exports.addRental = async (req, res) => {
     daily_rate,
     status,
     quantity,
-    note
+    note,
+    batch_id
   } = req.body;
   
   if (!equipment_id) {
@@ -19,6 +20,11 @@ exports.addRental = async (req, res) => {
   
   if (!quantity || quantity < 1) {
     quantity = 1; // Výchozí množství je 1 kus
+  }
+  
+  // Pokud není batch_id předáno, vygenerujeme ho (timestamp)
+  if (!batch_id) {
+    batch_id = `ISSUE-${new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14)}-${Math.floor(Math.random() * 1000)}`;
   }
   
   // Konverze ID na čísla
@@ -86,9 +92,10 @@ exports.addRental = async (req, res) => {
         daily_rate,
         status,
         quantity,
-        note
+        note,
+        batch_id
       ) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
       RETURNING *
     `, [
       order_id,
@@ -98,7 +105,8 @@ exports.addRental = async (req, res) => {
       daily_rate,
       status,
       quantity,
-      note || null
+      note || null,
+      batch_id
     ]);
     
     // Aktualizace stavu vybavení na 'borrowed' a snížení dostupného množství, pokud je výpůjčka 'issued'
@@ -128,13 +136,14 @@ exports.addRental = async (req, res) => {
     
     res.status(201).json({
       message: 'Výpůjčka byla úspěšně přidána.',
-      rental: result.rows[0]
+      rental: result.rows[0],
+      batch_id: batch_id
     });
   } catch (error) {
     console.error('Chyba při přidání výpůjčky:', error);
     res.status(500).json({ 
       message: 'Chyba serveru při přidání výpůjčky.',
-      error: error.message // Přidáno pro lepší diagnostiku
+      error: error.message
     });
   }
 };
@@ -255,128 +264,6 @@ exports.updateRental = async (req, res) => {
   }
 };
 
-// Vrácení výpůjčky
-exports.returnRental = async (req, res) => {
-  const { rental_id } = req.params;
-  const { 
-    actual_return_date, 
-    condition,
-    damage_description,
-    additional_charges,
-    return_quantity,
-    notes
-  } = req.body;
-  
-  try {
-    // Kontrola existence výpůjčky
-    const rentalCheck = await db.query(
-      'SELECT r.*, e.total_stock FROM rentals r LEFT JOIN equipment e ON r.equipment_id = e.id WHERE r.id = $1',
-      [rental_id]
-    );
-    
-    if (rentalCheck.rows.length === 0) {
-      return res.status(404).json({ message: 'Výpůjčka nenalezena.' });
-    }
-    
-    const rental = rentalCheck.rows[0];
-    
-    // Kontrola, že výpůjčka není už vrácena
-    if (rental.status === 'returned') {
-      return res.status(400).json({ message: 'Tato výpůjčka již byla vrácena.' });
-    }
-    
-    // Kontrola, že vracíme platné množství
-    const originalQuantity = parseInt(rental.quantity);
-    let quantityToReturn = return_quantity ? parseInt(return_quantity) : originalQuantity;
-    
-    if (quantityToReturn <= 0 || quantityToReturn > originalQuantity) {
-      return res.status(400).json({ 
-        message: `Neplatné množství k vrácení. Původně vypůjčeno: ${originalQuantity} kusů.`
-      });
-    }
-    
-    // Zjistíme, jestli jde o částečné nebo úplné vrácení
-    const isPartialReturn = quantityToReturn < originalQuantity;
-    
-    // Pokud je to částečné vrácení, upravíme původní výpůjčku a vytvoříme záznam o vrácení
-    if (isPartialReturn) {
-      // Nejprve aktualizujeme počet kusů v původní výpůjčce
-      await db.query(
-        'UPDATE rentals SET quantity = $1 WHERE id = $2',
-        [originalQuantity - quantityToReturn, rental_id]
-      );
-    } else {
-      // Pokud vracíme všechno, změníme stav původní výpůjčky na 'returned'
-      await db.query(
-        'UPDATE rentals SET status = $1, actual_return_date = $2 WHERE id = $3',
-        ['returned', actual_return_date || new Date(), rental_id]
-      );
-    }
-    
-    // Vytvoříme záznam o vrácení
-    const returnResult = await db.query(`
-      INSERT INTO returns (
-        rental_id,
-        return_date,
-        condition,
-        damage_description,
-        additional_charges,
-        quantity,
-        notes
-      ) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7) 
-      RETURNING *
-    `, [
-      rental_id,
-      actual_return_date || new Date(),
-      condition || 'ok',
-      damage_description || null,
-      additional_charges || 0,
-      quantityToReturn,
-      notes || null
-    ]);
-    
-    // Aktualizace stavu vybavení a množství ve skladu
-    // Nejprve zjistíme aktuální stav a množství
-    const equipmentId = rental.equipment_id;
-    const equipmentCheck = await db.query(
-      'SELECT * FROM equipment WHERE id = $1',
-      [equipmentId]
-    );
-    
-    if (equipmentCheck.rows.length > 0) {
-      const equipment = equipmentCheck.rows[0];
-      let currentStock = equipment.total_stock === null ? 0 : parseInt(equipment.total_stock);
-      
-      // Přidáme vrácené kusy zpět do skladu
-      currentStock += quantityToReturn;
-      
-      // Aktualizujeme stav vybavení podle jeho kondice při vrácení
-      let newStatus = 'available';
-      if (condition === 'damaged') {
-        newStatus = 'maintenance';
-      }
-      
-      // Aktualizujeme vybavení
-      await db.query(
-        'UPDATE equipment SET total_stock = $1, status = $2 WHERE id = $3',
-        [currentStock, newStatus, equipmentId]
-      );
-    }
-    
-    res.status(200).json({
-      message: isPartialReturn ? 'Část výpůjčky byla úspěšně vrácena.' : 'Výpůjčka byla úspěšně vrácena.',
-      return: returnResult.rows[0]
-    });
-  } catch (error) {
-    console.error('Chyba při vracení výpůjčky:', error);
-    res.status(500).json({ 
-      message: 'Chyba serveru při vracení výpůjčky.',
-      error: error.message
-    });
-  }
-};
-
 // Získání všech výpůjček pro zakázku
 exports.getRentalsByOrder = async (req, res) => {
   const { order_id } = req.params;
@@ -400,453 +287,25 @@ exports.getRentalsByOrder = async (req, res) => {
   }
 };
 
-// Generování dodacího listu pro zakázku
-exports.generateDeliveryNote = async (req, res) => {
-  const { order_id } = req.params;
+// Získání všech výpůjček podle batch_id
+exports.getRentalsByBatch = async (req, res) => {
+  const { batch_id } = req.params;
   
   try {
-    // Načtení zakázky včetně informací o zákazníkovi
-    const orderResult = await db.query(`
-      SELECT o.*, c.name as customer_name, c.address as customer_address, 
-             c.ico, c.dic, c.email as customer_email, c.phone as customer_phone
-      FROM orders o
-      LEFT JOIN customers c ON o.customer_id = c.id
-      WHERE o.id = $1
-    `, [order_id]);
-    
-    if (orderResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Zakázka nenalezena.' });
-    }
-    
-    const order = orderResult.rows[0];
-    
-    // Načtení výpůjček pro zakázku
-    const rentalsResult = await db.query(`
-      SELECT r.*, e.name as equipment_name, e.inventory_number, 
-             e.article_number, e.product_designation
+    const result = await db.query(`
+      SELECT r.*, e.name as equipment_name, e.inventory_number
       FROM rentals r
       LEFT JOIN equipment e ON r.equipment_id = e.id
-      WHERE r.order_id = $1
-      ORDER BY r.issue_date ASC
-    `, [order_id]);
-    
-    // Vytvoření struktury pro dodací list
-    const deliveryNote = {
-      order: order,
-      rentals: rentalsResult.rows,
-      created_at: new Date(),
-      total_items: rentalsResult.rows.reduce((sum, item) => sum + parseInt(item.quantity || 1), 0),
-      delivery_note_number: `DL-${order.order_number}`,
-    };
+      WHERE r.batch_id = $1
+      ORDER BY r.issue_date DESC
+    `, [batch_id]);
     
     res.status(200).json({
-      message: 'Dodací list byl úspěšně vygenerován.',
-      deliveryNote
+      count: result.rows.length,
+      rentals: result.rows
     });
   } catch (error) {
-    console.error('Chyba při generování dodacího listu:', error);
-    res.status(500).json({ message: 'Chyba serveru při generování dodacího listu.' });
-  }
-};
-
-// Uložení dodacího listu
-exports.saveDeliveryNote = async (req, res) => {
-  const { order_id } = req.params;
-  const { delivery_note_number, notes } = req.body;
-  
-  try {
-    // Kontrola existence zakázky
-    const orderCheck = await db.query('SELECT * FROM orders WHERE id = $1', [order_id]);
-    
-    if (orderCheck.rows.length === 0) {
-      return res.status(404).json({ message: 'Zakázka nenalezena.' });
-    }
-    
-    // Kontrola, zda již existuje dodací list pro tuto zakázku
-    const existingCheck = await db.query(
-      'SELECT * FROM delivery_notes WHERE order_id = $1',
-      [order_id]
-    );
-    
-    let result;
-    if (existingCheck.rows.length > 0) {
-      // Aktualizace existujícího dodacího listu
-      result = await db.query(`
-        UPDATE delivery_notes
-        SET 
-          delivery_note_number = $1,
-          notes = $2,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE order_id = $3
-        RETURNING *
-      `, [
-        delivery_note_number,
-        notes,
-        order_id
-      ]);
-    } else {
-      // Vytvoření nového dodacího listu
-      result = await db.query(`
-        INSERT INTO delivery_notes (
-          order_id,
-          delivery_note_number,
-          notes
-        )
-        VALUES ($1, $2, $3)
-        RETURNING *
-      `, [
-        order_id,
-        delivery_note_number || `DL-${orderCheck.rows[0].order_number}`,
-        notes
-      ]);
-    }
-    
-    res.status(200).json({
-      message: 'Dodací list byl úspěšně uložen.',
-      deliveryNote: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Chyba při ukládání dodacího listu:', error);
-    res.status(500).json({ message: 'Chyba serveru při ukládání dodacího listu.' });
-  }
-};
-
-// Generování podkladu pro fakturaci
-exports.generateBillingData = async (req, res) => {
-  const { order_id } = req.params;
-  const { billing_date, include_returned_only } = req.body;
-  
-  try {
-    // Načtení zakázky včetně informací o zákazníkovi
-    const orderResult = await db.query(`
-      SELECT o.*, c.name as customer_name, c.address as customer_address, 
-             c.ico, c.dic, c.email as customer_email, c.phone as customer_phone
-      FROM orders o
-      LEFT JOIN customers c ON o.customer_id = c.id
-      WHERE o.id = $1
-    `, [order_id]);
-    
-    if (orderResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Zakázka nenalezena.' });
-    }
-    
-    const order = orderResult.rows[0];
-    
-    // Určení data fakturace - buď předané, nebo aktuální datum
-    const billingDateObj = billing_date ? new Date(billing_date) : new Date();
-    
-    // Zformátování data pro SQL
-    const formattedBillingDate = billingDateObj.toISOString().split('T')[0];
-    
-    // Připravíme SQL podmínku pro filtrování vrácených/nevrácených výpůjček
-    let returnedCondition = '';
-    if (include_returned_only === true) {
-      returnedCondition = 'AND (r.status = \'returned\' OR r.actual_return_date IS NOT NULL)';
-    }
-    
-    // Načtení výpůjček pro zakázku
-    const rentalsResult = await db.query(`
-      SELECT r.*, e.name as equipment_name, e.inventory_number, 
-             e.article_number, e.product_designation
-      FROM rentals r
-      LEFT JOIN equipment e ON r.equipment_id = e.id
-      WHERE r.order_id = $1 ${returnedCondition}
-      ORDER BY r.issue_date ASC
-    `, [order_id]);
-    
-    // Výpočet fakturačních položek pro každou výpůjčku
-    const billingItems = [];
-    
-    for (const rental of rentalsResult.rows) {
-      // Určení počtu dní pro fakturaci
-      const issueDate = new Date(rental.issue_date);
-      
-      // Určení data vrácení - buď skutečné datum vrácení, nebo datum fakturace, nebo plánované datum vrácení
-      let returnDate = rental.actual_return_date ? new Date(rental.actual_return_date) : billingDateObj;
-      
-      // Pokud plánované datum vrácení je dříve než datum fakturace, použijeme plánované datum
-      if (rental.planned_return_date) {
-        const plannedReturnDate = new Date(rental.planned_return_date);
-        if (plannedReturnDate < returnDate && !rental.actual_return_date) {
-          returnDate = plannedReturnDate;
-        }
-      }
-      
-      // Výpočet počtu dní
-      const diffTime = Math.abs(returnDate - issueDate);
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1; // Minimálně 1 den
-      
-      // Výpočet ceny
-      const quantity = parseInt(rental.quantity) || 1;
-      const dailyRate = parseFloat(rental.daily_rate) || 0;
-      const totalPrice = diffDays * quantity * dailyRate;
-      
-      // Příprava fakturačních dat pro položku
-      billingItems.push({
-        rental_id: rental.id,
-        equipment_name: rental.equipment_name,
-        inventory_number: rental.inventory_number,
-        product_designation: rental.product_designation,
-        issue_date: rental.issue_date,
-        return_date: rental.actual_return_date || null,
-        planned_return_date: rental.planned_return_date,
-        days: diffDays,
-        quantity: quantity,
-        daily_rate: dailyRate,
-        total_price: totalPrice,
-        status: rental.status
-      });
-    }
-    
-    // Výpočet celkové ceny za všechny položky
-    const totalAmount = billingItems.reduce((sum, item) => sum + item.total_price, 0);
-    
-    // Vytvoření struktury fakturačního podkladu
-    const billingData = {
-      order: order,
-      billing_date: formattedBillingDate,
-      items: billingItems,
-      total_amount: totalAmount,
-      invoice_number: `INV-${order.order_number}-${formattedBillingDate.replace(/-/g, '')}`,
-      note: `Fakturační podklad vygenerován ${new Date().toISOString().split('T')[0]}`
-    };
-    
-    // Uložíme fakturační podklad do databáze pro pozdější použití
-    const billingResult = await db.query(`
-      INSERT INTO billing_data (
-        order_id,
-        invoice_number,
-        billing_date,
-        total_amount,
-        is_final_billing,
-        notes
-      )
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id
-    `, [
-      order_id,
-      billingData.invoice_number,
-      billingData.billing_date,
-      billingData.total_amount,
-      req.body.is_final_billing || false,
-      billingData.note
-    ]);
-    
-    const billingId = billingResult.rows[0].id;
-    
-    // Uložíme jednotlivé položky fakturačního podkladu
-    for (const item of billingItems) {
-      await db.query(`
-        INSERT INTO billing_items (
-          billing_data_id,
-          rental_id,
-          equipment_id,
-          description,
-          days,
-          quantity,
-          price_per_day,
-          total_price
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      `, [
-        billingId,
-        item.rental_id,
-        rental.equipment_id,
-        `${item.equipment_name} (${item.inventory_number})`,
-        item.days,
-        item.quantity,
-        item.daily_rate,
-        item.total_price
-      ]);
-    }
-    
-    // Označíme výpůjčky jako fakturované
-    if (req.body.is_final_billing) {
-      await db.query(`
-        UPDATE rentals
-        SET is_billed = true
-        WHERE order_id = $1
-      `, [order_id]);
-    }
-    
-    res.status(200).json({
-      message: 'Fakturační podklad byl úspěšně vygenerován.',
-      billingData
-    });
-  } catch (error) {
-    console.error('Chyba při generování fakturačního podkladu:', error);
-    res.status(500).json({ message: 'Chyba serveru při generování fakturačního podkladu.' });
-  }
-};
-
-// Získání fakturačních podkladů pro zakázku
-exports.getBillingDataByOrder = async (req, res) => {
-  const { order_id } = req.params;
-  
-  try {
-    // Kontrola existence zakázky
-    const orderCheck = await db.query('SELECT * FROM orders WHERE id = $1', [order_id]);
-    
-    if (orderCheck.rows.length === 0) {
-      return res.status(404).json({ message: 'Zakázka nenalezena.' });
-    }
-    
-    // Načtení fakturačních podkladů
-    const billingResult = await db.query(`
-      SELECT *
-      FROM billing_data
-      WHERE order_id = $1
-      ORDER BY billing_date DESC
-    `, [order_id]);
-    
-    res.status(200).json({
-      billingData: billingResult.rows
-    });
-  } catch (error) {
-    console.error('Chyba při načítání fakturačních podkladů:', error);
-    res.status(500).json({ message: 'Chyba serveru při načítání fakturačních podkladů.' });
-  }
-};
-
-// Získání konkrétního fakturačního podkladu
-exports.getBillingDataById = async (req, res) => {
-  const { billing_id } = req.params;
-  
-  try {
-    // Načtení fakturačního podkladu
-    const billingResult = await db.query(`
-      SELECT bd.*, o.order_number, c.name as customer_name, c.address as customer_address,
-             c.ico, c.dic, c.email as customer_email, c.phone as customer_phone
-      FROM billing_data bd
-      LEFT JOIN orders o ON bd.order_id = o.id
-      LEFT JOIN customers c ON o.customer_id = c.id
-      WHERE bd.id = $1
-    `, [billing_id]);
-    
-    if (billingResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Fakturační podklad nebyl nalezen.' });
-    }
-    
-    const billingData = billingResult.rows[0];
-    
-    // Načtení položek fakturačního podkladu
-    const itemsResult = await db.query(`
-      SELECT *
-      FROM billing_items
-      WHERE billing_data_id = $1
-    `, [billing_id]);
-    
-    // Sestavení kompletního fakturačního podkladu
-    const completeBillingData = {
-      ...billingData,
-      items: itemsResult.rows
-    };
-    
-    res.status(200).json({
-      billingData: completeBillingData
-    });
-  } catch (error) {
-    console.error('Chyba při načítání fakturačního podkladu:', error);
-    res.status(500).json({ message: 'Chyba serveru při načítání fakturačního podkladu.' });
-  }
-};
-// Generování dodacího listu pro konkrétní výpůjčku
-exports.generateRentalDeliveryNote = async (req, res) => {
-  const { rental_id } = req.params;
-  
-  try {
-    // Načtení výpůjčky včetně informací o zakázce a zákazníkovi
-    const rentalResult = await db.query(`
-      SELECT r.*, e.name as equipment_name, e.inventory_number, 
-             e.article_number, e.product_designation,
-             o.order_number, o.customer_id,
-             c.name as customer_name, c.address as customer_address, 
-             c.ico, c.dic, c.email as customer_email, c.phone as customer_phone
-      FROM rentals r
-      JOIN equipment e ON r.equipment_id = e.id
-      JOIN orders o ON r.order_id = o.id
-      JOIN customers c ON o.customer_id = c.id
-      WHERE r.id = $1
-    `, [rental_id]);
-    
-    if (rentalResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Výpůjčka nenalezena.' });
-    }
-    
-    const rental = rentalResult.rows[0];
-    
-    // Vytvoření struktury pro dodací list výpůjčky
-    const deliveryNote = {
-      rental: rental,
-      order_number: rental.order_number,
-      customer_name: rental.customer_name,
-      customer_address: rental.customer_address,
-      customer_ico: rental.ico,
-      customer_dic: rental.dic,
-      customer_email: rental.customer_email,
-      customer_phone: rental.customer_phone,
-      created_at: new Date(),
-      delivery_note_number: `DLV-${rental.id}-${new Date().toISOString().split('T')[0].replace(/-/g, '')}`,
-    };
-    
-    res.status(200).json({
-      message: 'Dodací list pro výpůjčku byl úspěšně vygenerován.',
-      deliveryNote
-    });
-  } catch (error) {
-    console.error('Chyba při generování dodacího listu pro výpůjčku:', error);
-    res.status(500).json({ message: 'Chyba serveru při generování dodacího listu pro výpůjčku.' });
-  }
-};
-
-// Generování dodacího listu pro vratku
-exports.generateReturnDeliveryNote = async (req, res) => {
-  const { return_id } = req.params;
-  
-  try {
-    // Načtení vratky včetně informací o výpůjčce, zakázce a zákazníkovi
-    const returnResult = await db.query(`
-      SELECT ret.*, r.equipment_id, r.issue_date, r.order_id, r.quantity as original_quantity,
-             e.name as equipment_name, e.inventory_number, 
-             e.article_number, e.product_designation,
-             o.order_number, o.customer_id,
-             c.name as customer_name, c.address as customer_address, 
-             c.ico, c.dic, c.email as customer_email, c.phone as customer_phone
-      FROM returns ret
-      JOIN rentals r ON ret.rental_id = r.id
-      JOIN equipment e ON r.equipment_id = e.id
-      JOIN orders o ON r.order_id = o.id
-      JOIN customers c ON o.customer_id = c.id
-      WHERE ret.id = $1
-    `, [return_id]);
-    
-    if (returnResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Vratka nenalezena.' });
-    }
-    
-    const returnData = returnResult.rows[0];
-    
-    // Vytvoření struktury pro dodací list vratky
-    const deliveryNote = {
-      return: returnData,
-      rental_id: returnData.rental_id,
-      order_number: returnData.order_number,
-      customer_name: returnData.customer_name,
-      customer_address: returnData.customer_address,
-      customer_ico: returnData.ico,
-      customer_dic: returnData.dic,
-      customer_email: returnData.customer_email,
-      customer_phone: returnData.customer_phone,
-      created_at: new Date(),
-      delivery_note_number: `RTN-${returnData.id}-${new Date().toISOString().split('T')[0].replace(/-/g, '')}`,
-    };
-    
-    res.status(200).json({
-      message: 'Dodací list pro vratku byl úspěšně vygenerován.',
-      deliveryNote
-    });
-  } catch (error) {
-    console.error('Chyba při generování dodacího listu pro vratku:', error);
-    res.status(500).json({ message: 'Chyba serveru při generování dodacího listu pro vratku.' });
+    console.error('Chyba při načítání výpůjček podle batch_id:', error);
+    res.status(500).json({ message: 'Chyba serveru při načítání výpůjček.' });
   }
 };
