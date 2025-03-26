@@ -21,8 +21,8 @@ const AddRentalForm = () => {
   const [rentalItems, setRentalItems] = useState([{
     equipment_id: '',
     quantity: 1,
-    daily_rate: 0,
-    subtotal: 0
+    daily_rate: 0
+    // subtotal se počítá dynamicky, není součástí stavu
   }]);
   
   const [equipment, setEquipment] = useState([]);
@@ -60,7 +60,7 @@ const AddRentalForm = () => {
     fetchData();
   }, [order_id]);
 
-  // Přepočet subtotal a celkové ceny při změně dat
+  // Přepočet celkové ceny při změně dat
   useEffect(() => {
     calculateTotals();
   }, [rentalItems, formData.issue_date, formData.planned_return_date]);
@@ -79,20 +79,17 @@ const AddRentalForm = () => {
     return diffDays || 1; // Minimálně 1 den
   };
 
-  // Výpočet všech subtotals a celkové ceny
+  // Výpočet celkové ceny - OPRAVENO: Neaktualizuje rentalItems
   const calculateTotals = () => {
     const days = calculateDays();
     
-    // Aktualizace subtotals pro každou položku
-    const updatedItems = rentalItems.map(item => {
+    // Výpočet celkové ceny bez změny rentalItems
+    let total = 0;
+    for (const item of rentalItems) {
       const subtotal = item.daily_rate * item.quantity * days;
-      return { ...item, subtotal };
-    });
+      total += subtotal;
+    }
     
-    setRentalItems(updatedItems);
-    
-    // Výpočet celkové ceny
-    const total = updatedItems.reduce((sum, item) => sum + item.subtotal, 0);
     setTotalPrice(total);
   };
   
@@ -103,8 +100,8 @@ const AddRentalForm = () => {
       {
         equipment_id: '',
         quantity: 1,
-        daily_rate: 0,
-        subtotal: 0
+        daily_rate: 0
+        // subtotal se počítá dynamicky, není součástí stavu
       }
     ]);
   };
@@ -132,12 +129,14 @@ const AddRentalForm = () => {
           ...newItems[index],
           [field]: value,
           daily_rate: selectedEquipment.daily_rate
+          // subtotal se počítá dynamicky, není součástí stavu
         };
       } else {
         newItems[index] = {
           ...newItems[index],
           [field]: value,
           daily_rate: 0
+          // subtotal se počítá dynamicky, není součástí stavu
         };
       }
     } else if (field === 'quantity') {
@@ -173,6 +172,8 @@ const AddRentalForm = () => {
     }
     
     setRentalItems(newItems);
+    // Po aktualizaci položek necháme calculateTotals aktualizovat celkovou cenu
+    // Není potřeba volat calculateTotals přímo, protože se spustí díky useEffect
   };
   
   // Změna hodnoty v hlavním formuláři
@@ -291,6 +292,11 @@ const AddRentalForm = () => {
     if (!selectedEquipment) return '';
     
     return `K dispozici: ${selectedEquipment.total_stock || 0} ks`;
+  };
+  
+  // Vypočítání subtotal pro konkrétní položku - dynamicky bez ukládání do stavu
+  const calculateItemSubtotal = (item) => {
+    return item.daily_rate * item.quantity * calculateDays();
   };
   
   if (loading) {
@@ -462,7 +468,7 @@ const AddRentalForm = () => {
                       {formatCurrency(item.daily_rate)}
                     </td>
                     <td>
-                      {formatCurrency(item.subtotal)}
+                      {formatCurrency(calculateItemSubtotal(item))}
                     </td>
                     <td className="text-center">
                       <Button
