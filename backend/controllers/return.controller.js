@@ -127,3 +127,53 @@ exports.returnRental = async (req, res) => {
       error: error.message
     });
   }
+};
+
+// Získání všech vratek pro zakázku
+exports.getReturnsByOrder = async (req, res) => {
+  const { order_id } = req.params;
+  
+  try {
+    const result = await db.query(`
+      SELECT r.*, ret.*, e.name as equipment_name, e.inventory_number
+      FROM returns ret
+      JOIN rentals r ON ret.rental_id = r.id
+      JOIN equipment e ON r.equipment_id = e.id
+      WHERE r.order_id = $1
+      ORDER BY ret.return_date DESC
+    `, [order_id]);
+    
+    res.status(200).json({
+      count: result.rows.length,
+      returns: result.rows
+    });
+  } catch (error) {
+    console.error('Chyba při načítání vratek zakázky:', error);
+    res.status(500).json({ message: 'Chyba serveru při načítání vratek.' });
+  }
+};
+
+// Získání všech vratek podle batch_id
+exports.getReturnsByBatch = async (req, res) => {
+  const { batch_id } = req.params;
+  
+  try {
+    const result = await db.query(`
+      SELECT ret.*, r.order_id, r.equipment_id, r.issue_date,
+             e.name as equipment_name, e.inventory_number
+      FROM returns ret
+      JOIN rentals r ON ret.rental_id = r.id
+      JOIN equipment e ON r.equipment_id = e.id
+      WHERE ret.batch_id = $1
+      ORDER BY ret.return_date DESC
+    `, [batch_id]);
+    
+    res.status(200).json({
+      count: result.rows.length,
+      returns: result.rows
+    });
+  } catch (error) {
+    console.error('Chyba při načítání vratek podle batch_id:', error);
+    res.status(500).json({ message: 'Chyba serveru při načítání vratek.' });
+  }
+};

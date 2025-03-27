@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert, Table } from 'react-bootstrap';
-import { FaTrash, FaPlus } from 'react-icons/fa';
+import { FaTrash, FaPlus, FaFileAlt } from 'react-icons/fa';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_URL, formatCurrency, formatDate } from '../../config';
@@ -22,7 +22,6 @@ const AddRentalForm = () => {
     equipment_id: '',
     quantity: 1,
     daily_rate: 0
-    // subtotal se počítá dynamicky, není součástí stavu
   }]);
   
   const [equipment, setEquipment] = useState([]);
@@ -30,6 +29,10 @@ const AddRentalForm = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  
+  // Stav pro batch_id
+  const [batchId, setBatchId] = useState(null);
+  const [showDeliveryNoteOption, setShowDeliveryNoteOption] = useState(false);
   
   // Výpočet celkové ceny
   const [totalPrice, setTotalPrice] = useState(0);
@@ -101,7 +104,6 @@ const AddRentalForm = () => {
         equipment_id: '',
         quantity: 1,
         daily_rate: 0
-        // subtotal se počítá dynamicky, není součástí stavu
       }
     ]);
   };
@@ -129,14 +131,12 @@ const AddRentalForm = () => {
           ...newItems[index],
           [field]: value,
           daily_rate: selectedEquipment.daily_rate
-          // subtotal se počítá dynamicky, není součástí stavu
         };
       } else {
         newItems[index] = {
           ...newItems[index],
           [field]: value,
           daily_rate: 0
-          // subtotal se počítá dynamicky, není součástí stavu
         };
       }
     } else if (field === 'quantity') {
@@ -172,8 +172,6 @@ const AddRentalForm = () => {
     }
     
     setRentalItems(newItems);
-    // Po aktualizaci položek necháme calculateTotals aktualizovat celkovou cenu
-    // Není potřeba volat calculateTotals přímo, protože se spustí díky useEffect
   };
   
   // Změna hodnoty v hlavním formuláři
@@ -253,6 +251,9 @@ const AddRentalForm = () => {
     setSaveSuccess(false);
     
     try {
+      // Vygenerujeme jedno batch_id pro celou skupinu výpůjček
+      const batchId = `ISSUE-${new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14)}-${Math.floor(Math.random() * 1000)}`;
+      
       // Vytvoření pole pro uložení jednotlivých výpůjček
       const rentalsToSave = rentalItems.map(item => ({
         order_id: parseInt(order_id),
@@ -262,20 +263,30 @@ const AddRentalForm = () => {
         planned_return_date: formData.planned_return_date,
         daily_rate: parseFloat(item.daily_rate),
         status: formData.status,
-        note: formData.note
+        note: formData.note,
+        batch_id: batchId // Přidáme batch_id
       }));
+      
+      // Pole pro ukládání výsledků
+      const results = [];
       
       // Postupné ukládání jednotlivých výpůjček
       for (const rental of rentalsToSave) {
-        await axios.post(`${API_URL}/orders/${order_id}/rentals`, rental);
+        const response = await axios.post(`${API_URL}/orders/${order_id}/rentals`, rental);
+        results.push(response.data);
       }
       
+      // Uložíme batch_id pro pozdější použití
+      setBatchId(batchId);
       setSaveSuccess(true);
       
-      // Přesměrování zpět na detail zakázky po úspěšném uložení
-      setTimeout(() => {
-        navigate(`/orders/${order_id}`);
-      }, 1500);
+      // Zobrazíme možnost generovat dodací list
+      setShowDeliveryNoteOption(true);
+      
+      // Automatické přesměrování je zde zakomentováno, aby uživatel mohl nejprve zobrazit dodací list
+      // setTimeout(() => {
+      //   navigate(`/orders/${order_id}`);
+      // }, 1500);
     } catch (error) {
       console.error('Chyba při přidání výpůjčky:', error);
       setError(error.response?.data?.message || 'Chyba při přidání výpůjčky.');
@@ -350,184 +361,208 @@ const AddRentalForm = () => {
       )}
       
       {error && <Alert variant="danger">{error}</Alert>}
-      {saveSuccess && <Alert variant="success">Výpůjčka byla úspěšně přidána.</Alert>}
       
-      <Card className="mb-4">
-        <Card.Header>
-          <h5 className="mb-0">Základní informace</h5>
-        </Card.Header>
-        <Card.Body>
-          <Form onSubmit={handleSubmit}>
-            <Row>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Datum vydání *</Form.Label>
-                  <Form.Control
-                    type="date"
-                    name="issue_date"
-                    value={formData.issue_date}
-                    onChange={handleChange}
-                    required
-                    disabled={loading}
-                  />
-                </Form.Group>
-              </Col>
+      {saveSuccess && showDeliveryNoteOption && (
+        <Alert variant="success">
+          <p>Výpůjčky byly úspěšně přidány.</p>
+          <div className="mt-2">
+            <Button 
+              as={Link} 
+              to={`/orders/batch-rentals/${batchId}/delivery-note`} 
+              variant="primary"
+              className="me-2"
+            >
+              <FaFileAlt className="me-2" /> Zobrazit dodací list
+            </Button>
+            <Button 
+              as={Link} 
+              to={`/orders/${order_id}`} 
+              variant="outline-secondary"
+            >
+              Zpět na zakázku
+            </Button>
+          </div>
+        </Alert>
+      )}
+      
+      {!saveSuccess && (
+        <Card className="mb-4">
+          <Card.Header>
+            <h5 className="mb-0">Základní informace</h5>
+          </Card.Header>
+          <Card.Body>
+            <Form onSubmit={handleSubmit}>
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Datum vydání *</Form.Label>
+                    <Form.Control
+                      type="date"
+                      name="issue_date"
+                      value={formData.issue_date}
+                      onChange={handleChange}
+                      required
+                      disabled={loading}
+                    />
+                  </Form.Group>
+                </Col>
+                
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Plánované datum vrácení *</Form.Label>
+                    <Form.Control
+                      type="date"
+                      name="planned_return_date"
+                      value={formData.planned_return_date}
+                      onChange={handleChange}
+                      required
+                      disabled={loading}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
               
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Plánované datum vrácení *</Form.Label>
-                  <Form.Control
-                    type="date"
-                    name="planned_return_date"
-                    value={formData.planned_return_date}
-                    onChange={handleChange}
-                    required
-                    disabled={loading}
-                  />
-                </Form.Group>
-              </Col>
-            </Row>
-            
-            <Row>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Stav výpůjčky</Form.Label>
-                  <Form.Select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleChange}
-                    disabled={loading}
-                  >
-                    <option value="created">Vytvořeno</option>
-                    <option value="issued">Vydáno</option>
-                  </Form.Select>
-                </Form.Group>
-              </Col>
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Stav výpůjčky</Form.Label>
+                    <Form.Select
+                      name="status"
+                      value={formData.status}
+                      onChange={handleChange}
+                      disabled={loading}
+                    >
+                      <option value="created">Vytvořeno</option>
+                      <option value="issued">Vydáno</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Poznámka</Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      rows={1}
+                      name="note"
+                      value={formData.note}
+                      onChange={handleChange}
+                      disabled={loading}
+                      placeholder="Poznámka k výpůjčce"
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
               
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Poznámka</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={1}
-                    name="note"
-                    value={formData.note}
-                    onChange={handleChange}
-                    disabled={loading}
-                    placeholder="Poznámka k výpůjčce"
-                  />
-                </Form.Group>
-              </Col>
-            </Row>
-            
-            <div className="mb-3">
-              <h5>Seznam vypůjčených položek</h5>
-              <p className="text-muted">Počet dní: {days} {days === 1 ? 'den' : days >= 2 && days <= 4 ? 'dny' : 'dní'}</p>
-            </div>
-            
-            <Table striped bordered hover responsive>
-              <thead>
-                <tr>
-                  <th style={{ width: '40%' }}>Vybavení</th>
-                  <th style={{ width: '15%' }}>Množství</th>
-                  <th style={{ width: '15%' }}>Denní sazba</th>
-                  <th style={{ width: '20%' }}>Celkem</th>
-                  <th style={{ width: '10%' }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rentalItems.map((item, index) => (
-                  <tr key={index}>
-                    <td>
-                      <Form.Select
-                        value={item.equipment_id}
-                        onChange={(e) => handleItemChange(index, 'equipment_id', e.target.value)}
-                        required
-                        disabled={loading}
-                      >
-                        <option value="">Vyberte vybavení</option>
-                        {equipment.map(eq => (
-                          <option key={eq.id} value={eq.id}>
-                            {eq.name} - {eq.inventory_number} ({formatCurrency(eq.daily_rate)}/den)
-                          </option>
-                        ))}
-                      </Form.Select>
-                      <small className="text-muted">{getAvailabilityInfo(item.equipment_id)}</small>
-                    </td>
-                    <td>
-                      <Form.Control
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                        required
-                        disabled={loading}
-                      />
-                    </td>
-                    <td>
-                      {formatCurrency(item.daily_rate)}
-                    </td>
-                    <td>
-                      {formatCurrency(calculateItemSubtotal(item))}
-                    </td>
-                    <td className="text-center">
+              <div className="mb-3">
+                <h5>Seznam vypůjčených položek</h5>
+                <p className="text-muted">Počet dní: {days} {days === 1 ? 'den' : days >= 2 && days <= 4 ? 'dny' : 'dní'}</p>
+              </div>
+              
+              <Table striped bordered hover responsive>
+                <thead>
+                  <tr>
+                    <th style={{ width: '40%' }}>Vybavení</th>
+                    <th style={{ width: '15%' }}>Množství</th>
+                    <th style={{ width: '15%' }}>Denní sazba</th>
+                    <th style={{ width: '20%' }}>Celkem</th>
+                    <th style={{ width: '10%' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rentalItems.map((item, index) => (
+                    <tr key={index}>
+                      <td>
+                        <Form.Select
+                          value={item.equipment_id}
+                          onChange={(e) => handleItemChange(index, 'equipment_id', e.target.value)}
+                          required
+                          disabled={loading}
+                        >
+                          <option value="">Vyberte vybavení</option>
+                          {equipment.map(eq => (
+                            <option key={eq.id} value={eq.id}>
+                              {eq.name} - {eq.inventory_number} ({formatCurrency(eq.daily_rate)}/den)
+                            </option>
+                          ))}
+                        </Form.Select>
+                        <small className="text-muted">{getAvailabilityInfo(item.equipment_id)}</small>
+                      </td>
+                      <td>
+                        <Form.Control
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                          required
+                          disabled={loading}
+                        />
+                      </td>
+                      <td>
+                        {formatCurrency(item.daily_rate)}
+                      </td>
+                      <td>
+                        {formatCurrency(calculateItemSubtotal(item))}
+                      </td>
+                      <td className="text-center">
+                        <Button
+                          variant="outline-danger"
+                          size="sm"
+                          onClick={() => removeRentalItem(index)}
+                          disabled={loading || rentalItems.length <= 1}
+                        >
+                          <FaTrash />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan="5">
                       <Button
-                        variant="outline-danger"
+                        variant="outline-primary"
                         size="sm"
-                        onClick={() => removeRentalItem(index)}
-                        disabled={loading || rentalItems.length <= 1}
+                        onClick={addRentalItem}
+                        disabled={loading}
                       >
-                        <FaTrash />
+                        <FaPlus /> Přidat položku
                       </Button>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan="5">
-                    <Button
-                      variant="outline-primary"
-                      size="sm"
-                      onClick={addRentalItem}
-                      disabled={loading}
-                    >
-                      <FaPlus /> Přidat položku
-                    </Button>
-                  </td>
-                </tr>
-                <tr>
-                  <td colSpan="3" className="text-end">
-                    <strong>Celkem:</strong>
-                  </td>
-                  <td>
-                    <strong>{formatCurrency(totalPrice)}</strong>
-                  </td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </Table>
-            
-            <div className="d-flex justify-content-end gap-2 mt-3">
-              <Button 
-                as={Link} 
-                to={`/orders/${order_id}`} 
-                variant="outline-secondary"
-                disabled={loading}
-              >
-                Zrušit
-              </Button>
-              <Button 
-                type="submit" 
-                variant="primary"
-                disabled={loading || equipment.length === 0}
-              >
-                {loading ? 'Ukládání...' : 'Přidat výpůjčku'}
-              </Button>
-            </div>
-          </Form>
-        </Card.Body>
-      </Card>
+                  <tr>
+                    <td colSpan="3" className="text-end">
+                      <strong>Celkem:</strong>
+                    </td>
+                    <td>
+                      <strong>{formatCurrency(totalPrice)}</strong>
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </Table>
+              
+              <div className="d-flex justify-content-end gap-2 mt-3">
+                <Button 
+                  as={Link} 
+                  to={`/orders/${order_id}`} 
+                  variant="outline-secondary"
+                  disabled={loading}
+                >
+                  Zrušit
+                </Button>
+                <Button 
+                  type="submit" 
+                  variant="primary"
+                  disabled={loading || equipment.length === 0}
+                >
+                  {loading ? 'Ukládání...' : 'Přidat výpůjčku'}
+                </Button>
+              </div>
+            </Form>
+          </Card.Body>
+        </Card>
+      )}
     </Container>
   );
 };

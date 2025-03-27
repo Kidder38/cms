@@ -24,12 +24,28 @@ const OrderDetail = () => {
   const [billingData, setBillingData] = useState([]);
   const [loadingBillingData, setLoadingBillingData] = useState(false);
   
+  // Stav pro seskupování výpůjček podle batch_id
+  const [groupedRentals, setGroupedRentals] = useState({});
+  
   const fetchOrderDetail = async () => {
     try {
       setLoading(true);
       const response = await axios.get(`${API_URL}/orders/${id}`);
       setOrder(response.data.order);
       setRentals(response.data.rentals);
+      
+      // Seskupení výpůjček podle batch_id pro zobrazení tlačítek hromadného dodacího listu
+      const grouped = {};
+      response.data.rentals.forEach(rental => {
+        if (rental.batch_id) {
+          if (!grouped[rental.batch_id]) {
+            grouped[rental.batch_id] = [];
+          }
+          grouped[rental.batch_id].push(rental);
+        }
+      });
+      setGroupedRentals(grouped);
+      
       setLoading(false);
       
       // Také načteme fakturační podklady
@@ -233,7 +249,7 @@ const OrderDetail = () => {
                   as={Link}
                   to={`/orders/${id}/delivery-note`}
                 >
-                  <FaFileAlt className="me-2" /> Generovat dodací list
+                  <FaFileAlt className="me-2" /> Generovat dodací list zakázky
                 </Button>
                 
                 <Button
@@ -245,9 +261,23 @@ const OrderDetail = () => {
                 </Button>
               </div>
               
+              {/* Sekce pro hromadné dodací listy podle batch_id */}
+              {Object.keys(groupedRentals).length > 0 && (
+                <div className="mt-3">
+                  <h6>Hromadné dodací listy výpůjček:</h6>
+                  <ListGroup>
+                    {Object.entries(groupedRentals).map(([batchId, items]) => (
+                      <ListGroup.Item key={batchId} action as={Link} to={`/orders/batch-rentals/${batchId}/delivery-note`}>
+                        {formatDate(items[0].issue_date)} - {items.length} položek
+                      </ListGroup.Item>
+                    ))}
+                  </ListGroup>
+                </div>
+              )}
+              
               {billingData.length > 0 && (
                 <div className="mt-3">
-                  <h6>Existující fakturační podklady:</h6>
+                  <h6>Fakturační podklady:</h6>
                   <ListGroup>
                     {billingData.map(item => (
                       <ListGroup.Item key={item.id} action as={Link} to={`/orders/${id}/billing-data/${item.id}`}>
@@ -316,16 +346,18 @@ const OrderDetail = () => {
                         </td>
                         <td>
                           <div className="d-flex gap-1">
-                            {/* Tlačítko pro dodací list výpůjčky */}
-                            <Button
-                              as={Link}
-                              to={`/rentals/${rental.id}/delivery-note`}
-                              variant="outline-info"
-                              size="sm"
-                              title="Dodací list výpůjčky"
-                            >
-                              <FaFileAlt />
-                            </Button>
+                            {/* Pouze zobrazujeme odkaz na hromadný dodací list, když je k dispozici batch_id */}
+                            {rental.batch_id && (
+                              <Button
+                                as={Link}
+                                to={`/orders/batch-rentals/${rental.batch_id}/delivery-note`}
+                                variant="outline-info"
+                                size="sm"
+                                title="Dodací list výpůjčky"
+                              >
+                                <FaFileAlt />
+                              </Button>
+                            )}
                             
                             {/* Tlačítko pro vrácení výpůjčky */}
                             {user?.role === 'admin' && rental.status !== 'returned' && order.status !== 'completed' && (

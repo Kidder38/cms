@@ -10,19 +10,23 @@ const RentalReturnModal = ({ show, onHide, rental, onReturn }) => {
     damage_description: '',
     additional_charges: 0,
     return_quantity: rental ? rental.quantity : 1,
-    notes: ''
+    notes: '',
+    // Přidáno pole pro batch_id
+    batch_id: ''
   });
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [returnedId, setReturnedId] = useState(null);
+  const [returnedData, setReturnedData] = useState(null);
   
   // Aktualizace hodnot při změně vybrané výpůjčky
   useEffect(() => {
     if (rental) {
       setFormData(prev => ({
         ...prev,
-        return_quantity: rental.quantity || 1
+        return_quantity: rental.quantity || 1,
+        // Generování batch_id pro vratku
+        batch_id: `RETURN-${new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14)}-${Math.floor(Math.random() * 1000)}`
       }));
     }
   }, [rental]);
@@ -42,9 +46,10 @@ const RentalReturnModal = ({ show, onHide, rental, onReturn }) => {
     
     try {
       const response = await onReturn(rental.id, formData);
-      // Pokud vrácení bylo úspěšné a máme ID vratky, uložíme ho
-      if (response && response.return && response.return.id) {
-        setReturnedId(response.return.id);
+      
+      // Uložíme celá vrácená data včetně batch_id pro zobrazení hromadného dodacího listu
+      if (response) {
+        setReturnedData(response);
       } else {
         onHide();
       }
@@ -58,7 +63,7 @@ const RentalReturnModal = ({ show, onHide, rental, onReturn }) => {
   
   // Reset stavu při zavření modálního okna
   const handleClose = () => {
-    setReturnedId(null);
+    setReturnedData(null);
     setError(null);
     onHide();
   };
@@ -71,7 +76,7 @@ const RentalReturnModal = ({ show, onHide, rental, onReturn }) => {
       <Modal.Body>
         {error && <Alert variant="danger">{error}</Alert>}
         
-        {rental && !returnedId && (
+        {rental && !returnedData && (
           <form onSubmit={handleSubmit}>
             <div className="mb-3">
               <label className="form-label">Vybavení</label>
@@ -161,21 +166,25 @@ const RentalReturnModal = ({ show, onHide, rental, onReturn }) => {
                 rows="2"
               ></textarea>
             </div>
+            
+            {/* Skryté pole pro batch_id - není nutné ho zobrazovat uživateli */}
+            <input type="hidden" name="batch_id" value={formData.batch_id} />
           </form>
         )}
         
-        {returnedId && (
+        {returnedData && (
           <Alert variant="success">
-            Výpůjčka byla úspěšně vrácena. Nyní můžete zobrazit dodací list vratky.
+            <p>Výpůjčka byla úspěšně vrácena.</p>
+            <p>Můžete zobrazit dodací list vratky nebo přidat další vratky do této dávky.</p>
           </Alert>
         )}
       </Modal.Body>
       <Modal.Footer>
-        {returnedId ? (
+        {returnedData ? (
           <>
             <Button 
               as={Link} 
-              to={`/returns/${returnedId}/delivery-note`}
+              to={`/orders/batch-returns/${returnedData.batch_id}/delivery-note`}
               variant="info"
             >
               <FaFileAlt className="me-2" /> Zobrazit dodací list vratky

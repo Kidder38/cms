@@ -14,25 +14,23 @@ router.put('/:id', verifyToken, isAdmin, orderController.updateOrder);
 router.delete('/:id', verifyToken, isAdmin, orderController.deleteOrder);
 
 // Routy pro výpůjčky
-router.get('/:order_id/rentals', verifyToken, rentalController.getRentalsByOrder);
+router.get('/:order_id/rentals', rentalController.getRentalsByOrder);
 router.post('/:order_id/rentals', verifyToken, isAdmin, rentalController.addRental);
 router.put('/:order_id/rentals/:rental_id', verifyToken, isAdmin, rentalController.updateRental);
 
 // Routy pro hromadné výpůjčky
-router.get('/batch-rentals/:batch_id', verifyToken, rentalController.getRentalsByBatch);
+router.get('/batch-rentals/:batch_id', rentalController.getRentalsByBatch);
+router.get('/batch-rentals/:batch_id/delivery-note', documentController.generateBatchDeliveryNote);
 
 // Routy pro vratky
 router.post('/:order_id/rentals/:rental_id/return', verifyToken, isAdmin, returnController.returnRental);
 router.get('/:order_id/returns', verifyToken, returnController.getReturnsByOrder);
 router.get('/batch-returns/:batch_id', verifyToken, returnController.getReturnsByBatch);
-
-// Routy pro hromadné dodací listy
-router.get('/batch-rentals/:batch_id/delivery-note', verifyToken, documentController.generateBatchDeliveryNote);
-router.get('/batch-returns/:batch_id/delivery-note', verifyToken, documentController.generateBatchReturnNote);
+router.get('/batch-returns/:batch_id/delivery-note', documentController.generateBatchReturnNote);
 
 // Routy pro fakturační podklady
 router.post('/:order_id/billing-data', verifyToken, isAdmin, documentController.generateBillingData);
-router.get('/:order_id/billing-data', verifyToken, documentController.getBillingDataByOrder);
-router.get('/:order_id/billing-data/:billing_id', verifyToken, documentController.getBillingDataById);
+router.get('/:order_id/billing-data', documentController.getBillingDataByOrder);
+router.get('/:order_id/billing-data/:billing_id', documentController.getBillingDataById);
 
 module.exports = router;
