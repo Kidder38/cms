@@ -36,12 +36,17 @@ import {
 } from 'react-icons/fa';
 
 import RentalReturnModal from './RentalReturnModal';
-import BatchRentalForm from './AddRentalForm';
+import AddRentalForm from './AddRentalForm';
 
 const OrderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // Debugging - log the ID parameter
+  console.log("ID z URL parametru:", id);
+  console.log("Typ ID parametru:", typeof id);
+  console.log("ID po konverzi na celé číslo:", parseInt(id));
 
   // Stavy pro data zakázky
   const [order, setOrder] = useState(null);
@@ -58,10 +63,35 @@ const OrderDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Validace ID
+  const validateId = useCallback(() => {
+    // Kontrola, zda ID existuje a je číslo
+    if (!id || isNaN(parseInt(id))) {
+      setError('Neplatné ID zakázky. Prosím, zkuste se vrátit na seznam zakázek a vybrat platnou zakázku.');
+      setLoading(false);
+      return false;
+    }
+    return true;
+  }, [id]);
+
   // Načtení kompletních dat zakázky
   const fetchOrderDetails = useCallback(async () => {
+    // Nejprve ověříme, zda je ID platné
+    if (!validateId()) return;
+
     try {
       setLoading(true);
+      
+      // Získáme číselnou hodnotu ID
+      const numericId = parseInt(id);
+      
+      console.log("Odesílám požadavek na detail zakázky s ID:", numericId);
+      
+      // Vypíšeme, jaké API endpointy se volají
+      console.log("API endpoint pro zakázku:", `${API_URL}/orders/${numericId}`);
+      console.log("API endpoint pro výpůjčky:", `${API_URL}/orders/${numericId}/rentals`);
+      console.log("API endpoint pro vratky:", `${API_URL}/orders/${numericId}/returns`);
+      console.log("API endpoint pro faktury:", `${API_URL}/orders/${numericId}/billing-data`);
       
       // Paralelní načítání dat
       const [
@@ -70,10 +100,10 @@ const OrderDetail = () => {
         returnsResponse, 
         billingResponse
       ] = await Promise.all([
-        axios.get(`${API_URL}/orders/${id}`),
-        axios.get(`${API_URL}/orders/${id}/rentals`),
-        axios.get(`${API_URL}/orders/${id}/returns`),
-        axios.get(`${API_URL}/orders/${id}/billing-data`)
+        axios.get(`${API_URL}/orders/${numericId}`),
+        axios.get(`${API_URL}/orders/${numericId}/rentals`),
+        axios.get(`${API_URL}/orders/${numericId}/returns`),
+        axios.get(`${API_URL}/orders/${numericId}/billing-data`)
       ]);
 
       setOrder(orderResponse.data.order);
@@ -82,11 +112,14 @@ const OrderDetail = () => {
       setBillingData(billingResponse.data.billingData);
     } catch (error) {
       console.error('Chyba při načítání dat:', error);
-      setError('Nepodařilo se načíst detail zakázky.');
+      console.error('Detaily chyby:', error.response?.data);
+      console.error('Status kód:', error.response?.status);
+      console.error('URL požadavku:', error.config?.url);
+      setError('Nepodařilo se načíst detail zakázky. ' + (error.response?.data?.message || ''));
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, validateId, API_URL]);
 
   // Inicializace dat při načtení komponenty
   useEffect(() => {
@@ -106,12 +139,16 @@ const OrderDetail = () => {
 
   // Smazání zakázky
   const handleDeleteOrder = async () => {
+    if (!validateId()) return;
     if (!window.confirm('Opravdu chcete smazat tuto zakázku?')) return;
 
     try {
-      await axios.delete(`${API_URL}/orders/${id}`);
+      const numericId = parseInt(id);
+      await axios.delete(`${API_URL}/orders/${numericId}`);
       navigate('/orders');
     } catch (error) {
+      console.error('Chyba při mazání zakázky:', error);
+      console.error('Detaily chyby:', error.response?.data);
       alert(error.response?.data?.message || 'Chyba při mazání zakázky');
     }
   };
@@ -131,6 +168,23 @@ const OrderDetail = () => {
     return (
       <Container>
         <Alert variant="danger">{error}</Alert>
+        <Button 
+          variant="secondary" 
+          onClick={() => navigate('/orders')}
+        >
+          Zpět na seznam zakázek
+        </Button>
+      </Container>
+    );
+  }
+
+  // Pokud nemáme data zakázky, zobrazíme chybu
+  if (!order) {
+    return (
+      <Container>
+        <Alert variant="warning">
+          Zakázka nebyla nalezena nebo nebylo možné načíst její detaily.
+        </Alert>
         <Button 
           variant="secondary" 
           onClick={() => navigate('/orders')}
@@ -313,31 +367,37 @@ const OrderDetail = () => {
                 </tr>
               </thead>
               <tbody>
-                {rentals.map(rental => (
-                  <tr key={rental.id}>
-                    <td>{rental.equipment_name}</td>
-                    <td>{rental.quantity || 1} ks</td>
-                    <td>{formatDate(rental.issue_date)}</td>
-                    <td>
-                      <Badge bg={RENTAL_STATUS[rental.status].color}>
-                        {RENTAL_STATUS[rental.status].label}
-                      </Badge>
-                    </td>
-                    <td>
-                      <Button 
-                        variant="outline-primary" 
-                        size="sm"
-                        onClick={() => {
-                          setSelectedRental(rental);
-                          setShowReturnModal(true);
-                        }}
-                        disabled={rental.status === 'returned'}
-                      >
-                        <FaUndo className="me-1" /> Vrátit
-                      </Button>
-                    </td>
+                {rentals.length > 0 ? (
+                  rentals.map(rental => (
+                    <tr key={rental.id}>
+                      <td>{rental.equipment_name}</td>
+                      <td>{rental.quantity || 1} ks</td>
+                      <td>{formatDate(rental.issue_date)}</td>
+                      <td>
+                        <Badge bg={RENTAL_STATUS[rental.status]?.color || 'secondary'}>
+                          {RENTAL_STATUS[rental.status]?.label || rental.status}
+                        </Badge>
+                      </td>
+                      <td>
+                        <Button 
+                          variant="outline-primary" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedRental(rental);
+                            setShowReturnModal(true);
+                          }}
+                          disabled={rental.status === 'returned'}
+                        >
+                          <FaUndo className="me-1" /> Vrátit
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5" className="text-center">Žádné výpůjčky</td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </Table>
           </Card>
@@ -424,19 +484,27 @@ const OrderDetail = () => {
       </Row>
 
       {/* Modální okna */}
-{/* Modální okna */}
-<RentalReturnModal
+      <RentalReturnModal
         show={showReturnModal}
         onHide={() => setShowReturnModal(false)}
         rental={selectedRental}
         onReturn={async (rentalId, returnData) => {
           try {
-            await axios.post(`${API_URL}/orders/${id}/rentals/${rentalId}/return`, returnData);
+            // Ujistíme se, že ID zakázky je platné
+            const numericId = parseInt(id);
+            if (isNaN(numericId)) {
+              throw new Error('Neplatné ID zakázky');
+            }
+            
+            await axios.post(`${API_URL}/orders/${numericId}/rentals/${rentalId}/return`, returnData);
             fetchOrderDetails();
             setShowReturnModal(false);
+            return returnData; // Vraťte returnData pro pozdější použití
           } catch (error) {
             console.error('Chyba při vracení:', error);
+            console.error('Detaily chyby:', error.response?.data);
             alert('Nepodařilo se vrátit výpůjčku');
+            throw error;
           }
         }}
       />
@@ -450,8 +518,8 @@ const OrderDetail = () => {
           <Modal.Title>Přidat výpůjčku</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <BatchRentalForm 
-            initialOrderId={id}
+          <AddRentalForm 
+            initialOrderId={parseInt(id)}
             onSuccess={() => {
               fetchOrderDetails();
               setShowAddRentalModal(false);

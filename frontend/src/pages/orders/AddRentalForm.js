@@ -4,10 +4,19 @@ import { FaTrash, FaPlus, FaFileAlt } from 'react-icons/fa';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_URL, formatCurrency, formatDate } from '../../config';
+import { useAuth } from '../../context/AuthContext';
 
-const AddRentalForm = () => {
-  const { order_id } = useParams();
+const AddRentalForm = ({ initialOrderId, onSuccess }) => {
+  const params = useParams();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const order_id = initialOrderId || params.order_id;
+  // Debugging information 
+  console.log("order_id z prop nebo params:", order_id);
+  console.log("Typ order_id:", typeof order_id);
+  console.log("URL parametr order_id:", order_id);
+  console.log("Typ parametru order_id:", typeof order_id);
+  console.log("order_id po konverzi na číslo:", parseInt(order_id));
   
   // Stav pro celý formulář
   const [formData, setFormData] = useState({
@@ -28,7 +37,6 @@ const AddRentalForm = () => {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   
   // Stav pro batch_id
   const [batchId, setBatchId] = useState(null);
@@ -37,12 +45,41 @@ const AddRentalForm = () => {
   // Výpočet celkové ceny
   const [totalPrice, setTotalPrice] = useState(0);
   
+  // Nejprve ověříme, jestli je uživatel přihlášen a má oprávnění
+  useEffect(() => {
+    if (!user) {
+      setError('Pro přístup k této funkci musíte být přihlášen.');
+      setLoading(false);
+      return;
+    }
+    
+    if (user.role !== 'admin') {
+      setError('Nemáte oprávnění pro přístup k této funkci.');
+      setLoading(false);
+      return;
+    }
+  }, [user]);
+  
+  // Validace ID parametru
+  useEffect(() => {
+    if (!order_id || isNaN(parseInt(order_id))) {
+      setError('Neplatné ID zakázky. Prosím, zkuste se vrátit na seznam zakázek a vybrat platnou zakázku.');
+      setLoading(false);
+      return;
+    }
+  }, [order_id]);
+  
   // Načtení dat zakázky a dostupného vybavení
   useEffect(() => {
     const fetchData = async () => {
+      // Pokud není order_id platné, nepokračuj
+      if (!order_id || isNaN(parseInt(order_id))) return;
+      
       try {
+        const numericOrderId = parseInt(order_id);
+        
         // Načtení zakázky
-        const orderResponse = await axios.get(`${API_URL}/orders/${order_id}`);
+        const orderResponse = await axios.get(`${API_URL}/orders/${numericOrderId}`);
         setOrder(orderResponse.data.order);
         
         // Načtení dostupného vybavení
@@ -55,7 +92,10 @@ const AddRentalForm = () => {
         setLoading(false);
       } catch (error) {
         console.error('Chyba při načítání dat:', error);
-        setError('Nepodařilo se načíst data. Zkuste to prosím později.');
+        console.error('Detaily chyby:', error.response?.data);
+        console.error('Status kód:', error.response?.status);
+        console.error('URL požadavku:', error.config?.url);
+        setError('Nepodařilo se načíst data. ' + (error.response?.data?.message || 'Zkuste to prosím později.'));
         setLoading(false);
       }
     };
@@ -251,12 +291,17 @@ const AddRentalForm = () => {
     setSaveSuccess(false);
     
     try {
+      const numericOrderId = parseInt(order_id);
+      if (isNaN(numericOrderId)) {
+        throw new Error('Neplatné ID zakázky');
+      }
+      
       // Vygenerujeme jedno batch_id pro celou skupinu výpůjček
       const batchId = `ISSUE-${new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14)}-${Math.floor(Math.random() * 1000)}`;
       
       // Vytvoření pole pro uložení jednotlivých výpůjček
       const rentalsToSave = rentalItems.map(item => ({
-        order_id: parseInt(order_id),
+        order_id: numericOrderId,
         equipment_id: parseInt(item.equipment_id),
         quantity: parseInt(item.quantity),
         issue_date: formData.issue_date,
@@ -272,7 +317,7 @@ const AddRentalForm = () => {
       
       // Postupné ukládání jednotlivých výpůjček
       for (const rental of rentalsToSave) {
-        const response = await axios.post(`${API_URL}/orders/${order_id}/rentals`, rental);
+        const response = await axios.post(`${API_URL}/orders/${numericOrderId}/rentals`, rental);
         results.push(response.data);
       }
       
@@ -289,6 +334,9 @@ const AddRentalForm = () => {
       // }, 1500);
     } catch (error) {
       console.error('Chyba při přidání výpůjčky:', error);
+      console.error('Detaily chyby:', error.response?.data);
+      console.error('Status kód:', error.response?.status);
+      console.error('URL požadavku:', error.config?.url);
       setError(error.response?.data?.message || 'Chyba při přidání výpůjčky.');
     } finally {
       setLoading(false);
@@ -310,7 +358,10 @@ const AddRentalForm = () => {
     return item.daily_rate * item.quantity * calculateDays();
   };
   
-  if (loading) {
+  // State pro feedback při úspěšném uložení
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  
+  if (loading && !error) {
     return (
       <Container>
         <Alert variant="info">Načítání dat...</Alert>
@@ -333,7 +384,7 @@ const AddRentalForm = () => {
     );
   }
   
-  if (!order) {
+  if (!order && !saveSuccess) {
     return (
       <Container>
         <Alert variant="warning">Zakázka nebyla nalezena.</Alert>
@@ -347,14 +398,18 @@ const AddRentalForm = () => {
       </Container>
     );
   }
+
+  if (onSuccess && saveSuccess) {
+    onSuccess();
+  }
   
   const days = calculateDays();
   
   return (
     <Container>
-      <h1 className="mb-4">Přidat výpůjčku do zakázky #{order.order_number}</h1>
+      <h1 className="mb-4">Přidat výpůjčku do zakázky #{order?.order_number}</h1>
       
-      {equipment.length === 0 && (
+      {equipment.length === 0 && !saveSuccess && (
         <Alert variant="warning">
           Není k dispozici žádné dostupné vybavení k vypůjčení.
         </Alert>

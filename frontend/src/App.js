@@ -54,31 +54,46 @@ function App() {
                 
                 {/* Chráněné routy */}
                 <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/equipment" element={<EquipmentList />} />
-                <Route path="/equipment/:id" element={<EquipmentDetail />} />
+                
+                {/* Equipment routes - nejprve specifické, pak obecné */}
                 <Route path="/equipment/new" element={<EquipmentForm />} />
                 <Route path="/equipment/edit/:id" element={<EquipmentForm />} />
-                <Route path="/categories" element={<CategoryList />} />
+                <Route path="/equipment/:id" element={<EquipmentDetail />} />
+                <Route path="/equipment" element={<EquipmentList />} />
+                
+                {/* Category routes - nejprve specifické, pak obecné */}
                 <Route path="/categories/new" element={<CategoryForm />} />
                 <Route path="/categories/edit/:id" element={<CategoryForm />} />
-                <Route path="/customers" element={<CustomerList />} />
-                <Route path="/customers/:id" element={<CustomerDetail />} />
+                <Route path="/categories" element={<CategoryList />} />
+                
+                {/* Customer routes - nejprve specifické, pak obecné */}
                 <Route path="/customers/new" element={<CustomerForm />} />
                 <Route path="/customers/edit/:id" element={<CustomerForm />} />
-                <Route path="/orders" element={<OrderList />} />
-                <Route path="/orders/:id" element={<OrderDetail />} />
-                <Route path="/orders/new" element={<OrderForm />} />
-                <Route path="/orders/edit/:id" element={<OrderForm />} />
-                <Route path="/orders/:order_id/add-rental" element={<AddRentalForm />} />
-
-                {/* Dodací listy a faktury */}
-                <Route path="/orders/:order_id/delivery-note" element={<DeliveryNote />} />
-                <Route path="/orders/:order_id/billing-data" element={<BillingData />} />
+                <Route path="/customers/:id" element={<CustomerDetail />} />
+                <Route path="/customers" element={<CustomerList />} />
                 
-                {/* Nové cesty pro hromadné dodací listy */}
+                {/* Order routes - přeuspořádáno pro vyřešení konfliktu */}
+                {/* 1. Nejprve specifické cesty bez parametrů */}
+                <Route path="/orders/new" element={<OrderForm />} />
+                <Route path="/orders/batch-return" element={<BatchRentalReturnForm />} />
+                
+                {/* 2. Specifické cesty s parametry */}
+                <Route path="/orders/edit/:id" element={<OrderForm />} />
                 <Route path="/orders/batch-rentals/:batch_id/delivery-note" element={<BatchDeliveryNote />} />
                 <Route path="/orders/batch-returns/:batch_id/delivery-note" element={<BatchReturnNote />} />
-                <Route path="/orders/batch-return" element={<BatchRentalReturnForm />} />
+                
+                {/* 3. Cesty s order_id parametrem */}
+                <Route path="/orders/:order_id/add-rental" element={<AddRentalForm />} />
+                <Route path="/orders/:order_id/delivery-note" element={<DeliveryNote />} />
+                <Route path="/orders/:order_id/billing-data/:billing_id" element={<BillingData />} />
+                <Route path="/orders/:order_id/billing-data" element={<BillingData />} />
+                
+                {/* 4. Detail zakázky - obecná cesta s parametrem */}
+                <Route path="/orders/:id" element={<OrderDetail />} />
+                
+                {/* 5. Seznam zakázek - nejobecnější cesta */}
+                <Route path="/orders" element={<OrderList />} />
+                
                 {/* Chybějící stránka */}
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>

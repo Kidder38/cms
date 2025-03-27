@@ -24,6 +24,17 @@ exports.getAllOrders = async (req, res) => {
 exports.getOrderById = async (req, res) => {
   const { id } = req.params;
   
+  // Přidaná validace ID
+  if (!id || isNaN(parseInt(id))) {
+    return res.status(400).json({ 
+      message: 'Neplatné ID zakázky. Musí být celé číslo.',
+      error: 'INVALID_ID'
+    });
+  }
+  
+  // Konverze ID na číslo
+  const orderId = parseInt(id);
+  
   try {
     // Získání základních informací o zakázce
     const orderResult = await db.query(`
@@ -31,7 +42,7 @@ exports.getOrderById = async (req, res) => {
       FROM orders o
       LEFT JOIN customers c ON o.customer_id = c.id
       WHERE o.id = $1
-    `, [id]);
+    `, [orderId]);
     
     if (orderResult.rows.length === 0) {
       return res.status(404).json({ message: 'Zakázka nenalezena.' });
@@ -44,7 +55,7 @@ exports.getOrderById = async (req, res) => {
       LEFT JOIN equipment e ON r.equipment_id = e.id
       WHERE r.order_id = $1
       ORDER BY r.issue_date ASC
-    `, [id]);
+    `, [orderId]);
     
     res.status(200).json({
       order: orderResult.rows[0],
@@ -60,8 +71,9 @@ exports.getOrderById = async (req, res) => {
 exports.createOrder = async (req, res) => {
   const { customer_id, order_number, status, estimated_end_date, notes } = req.body;
   
-  if (!customer_id) {
-    return res.status(400).json({ message: 'Zákazník je povinný údaj.' });
+  // Validace povinných polí
+  if (!customer_id || isNaN(parseInt(customer_id))) {
+    return res.status(400).json({ message: 'Zákazník je povinný údaj a musí být platné číslo.' });
   }
   
   if (!order_number) {
@@ -70,7 +82,7 @@ exports.createOrder = async (req, res) => {
   
   try {
     // Kontrola existence zákazníka
-    const customerCheck = await db.query('SELECT * FROM customers WHERE id = $1', [customer_id]);
+    const customerCheck = await db.query('SELECT * FROM customers WHERE id = $1', [parseInt(customer_id)]);
     
     if (customerCheck.rows.length === 0) {
       return res.status(400).json({ message: 'Vybraný zákazník neexistuje.' });
@@ -94,7 +106,7 @@ exports.createOrder = async (req, res) => {
       VALUES ($1, $2, $3, $4, $5) 
       RETURNING *
     `, [
-      customer_id,
+      parseInt(customer_id),
       order_number,
       status || 'created',
       estimated_end_date,
@@ -116,24 +128,37 @@ exports.updateOrder = async (req, res) => {
   const { id } = req.params;
   const { customer_id, order_number, status, estimated_end_date, notes } = req.body;
   
-  if (!customer_id) {
-    return res.status(400).json({ message: 'Zákazník je povinný údaj.' });
+  // Validace ID zakázky
+  if (!id || isNaN(parseInt(id))) {
+    return res.status(400).json({ 
+      message: 'Neplatné ID zakázky. Musí být celé číslo.',
+      error: 'INVALID_ID'
+    });
+  }
+  
+  // Validace povinných polí
+  if (!customer_id || isNaN(parseInt(customer_id))) {
+    return res.status(400).json({ message: 'Zákazník je povinný údaj a musí být platné číslo.' });
   }
   
   if (!order_number) {
     return res.status(400).json({ message: 'Číslo zakázky je povinný údaj.' });
   }
   
+  // Konverze ID na čísla
+  const orderId = parseInt(id);
+  const customerId = parseInt(customer_id);
+  
   try {
     // Kontrola existence zakázky
-    const orderCheck = await db.query('SELECT * FROM orders WHERE id = $1', [id]);
+    const orderCheck = await db.query('SELECT * FROM orders WHERE id = $1', [orderId]);
     
     if (orderCheck.rows.length === 0) {
       return res.status(404).json({ message: 'Zakázka nenalezena.' });
     }
     
     // Kontrola existence zákazníka
-    const customerCheck = await db.query('SELECT * FROM customers WHERE id = $1', [customer_id]);
+    const customerCheck = await db.query('SELECT * FROM customers WHERE id = $1', [customerId]);
     
     if (customerCheck.rows.length === 0) {
       return res.status(400).json({ message: 'Vybraný zákazník neexistuje.' });
@@ -142,7 +167,7 @@ exports.updateOrder = async (req, res) => {
     // Kontrola duplicitního čísla zakázky (kromě aktuální zakázky)
     const duplicateCheck = await db.query(
       'SELECT * FROM orders WHERE order_number = $1 AND id != $2', 
-      [order_number, id]
+      [order_number, orderId]
     );
     
     if (duplicateCheck.rows.length > 0) {
@@ -161,12 +186,12 @@ exports.updateOrder = async (req, res) => {
       WHERE id = $6 
       RETURNING *
     `, [
-      customer_id,
+      customerId,
       order_number,
       status,
       estimated_end_date,
       notes,
-      id
+      orderId
     ]);
     
     res.status(200).json({
@@ -183,9 +208,20 @@ exports.updateOrder = async (req, res) => {
 exports.deleteOrder = async (req, res) => {
   const { id } = req.params;
   
+  // Validace ID zakázky
+  if (!id || isNaN(parseInt(id))) {
+    return res.status(400).json({ 
+      message: 'Neplatné ID zakázky. Musí být celé číslo.',
+      error: 'INVALID_ID'
+    });
+  }
+  
+  // Konverze ID na číslo
+  const orderId = parseInt(id);
+  
   try {
     // Kontrola existence zakázky
-    const orderCheck = await db.query('SELECT * FROM orders WHERE id = $1', [id]);
+    const orderCheck = await db.query('SELECT * FROM orders WHERE id = $1', [orderId]);
     
     if (orderCheck.rows.length === 0) {
       return res.status(404).json({ message: 'Zakázka nenalezena.' });
@@ -194,7 +230,7 @@ exports.deleteOrder = async (req, res) => {
     // Kontrola, zda zakázka nemá aktivní výpůjčky
     const rentalsCheck = await db.query(
       'SELECT * FROM rentals WHERE order_id = $1 AND status IN ($2, $3)', 
-      [id, 'created', 'issued']
+      [orderId, 'created', 'issued']
     );
     
     if (rentalsCheck.rows.length > 0) {
@@ -205,10 +241,10 @@ exports.deleteOrder = async (req, res) => {
     }
     
     // Nejprve smažeme všechny výpůjčky, které patří k této zakázce
-    await db.query('DELETE FROM rentals WHERE order_id = $1', [id]);
+    await db.query('DELETE FROM rentals WHERE order_id = $1', [orderId]);
     
     // Pak smažeme samotnou zakázku
-    await db.query('DELETE FROM orders WHERE id = $1', [id]);
+    await db.query('DELETE FROM orders WHERE id = $1', [orderId]);
     
     res.status(200).json({
       message: 'Zakázka byla úspěšně smazána.'
@@ -230,8 +266,20 @@ exports.addRental = async (req, res) => {
     status
   } = req.body;
   
-  if (!equipment_id) {
-    return res.status(400).json({ message: 'Vybavení je povinný údaj.' });
+  // Validace ID zakázky
+  if (!order_id || isNaN(parseInt(order_id))) {
+    return res.status(400).json({ 
+      message: 'Neplatné ID zakázky. Musí být celé číslo.',
+      error: 'INVALID_ORDER_ID'
+    });
+  }
+  
+  // Validace ID vybavení
+  if (!equipment_id || isNaN(parseInt(equipment_id))) {
+    return res.status(400).json({ 
+      message: 'Vybavení je povinný údaj a musí být platné číslo.',
+      error: 'INVALID_EQUIPMENT_ID'
+    });
   }
   
   // Konverze ID na čísla

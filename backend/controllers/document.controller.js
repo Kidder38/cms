@@ -350,3 +350,49 @@ exports.getBillingDataById = async (req, res) => {
     res.status(500).json({ message: 'Chyba serveru při načítání fakturačního podkladu.' });
   }
 };
+
+// Generování dodacího listu pro celou zakázku
+exports.getOrderDeliveryNote = async (req, res) => {
+  const { order_id } = req.params;
+  
+  try {
+    // Načtení zakázky včetně informací o zákazníkovi
+    const orderResult = await db.query(`
+      SELECT o.*, c.name as customer_name, c.address as customer_address, 
+             c.ico, c.dic, c.email as customer_email, c.phone as customer_phone
+      FROM orders o
+      LEFT JOIN customers c ON o.customer_id = c.id
+      WHERE o.id = $1
+    `, [order_id]);
+    
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Zakázka nenalezena.' });
+    }
+    
+    // Načtení všech výpůjček v zakázce
+    const rentalsResult = await db.query(`
+      SELECT r.*, e.name as equipment_name, e.inventory_number, 
+             e.article_number, e.product_designation
+      FROM rentals r
+      JOIN equipment e ON r.equipment_id = e.id
+      WHERE r.order_id = $1
+      ORDER BY r.issue_date ASC
+    `, [order_id]);
+    
+    // Vytvoření struktury pro dodací list
+    const deliveryNote = {
+      order: orderResult.rows[0],
+      rentals: rentalsResult.rows,
+      created_at: new Date(),
+      delivery_note_number: `DL-${orderResult.rows[0].order_number}`,
+      total_items: rentalsResult.rows.reduce((sum, item) => sum + parseInt(item.quantity || 1), 0)
+    };
+    
+    res.status(200).json({
+      deliveryNote
+    });
+  } catch (error) {
+    console.error('Chyba při generování dodacího listu:', error);
+    res.status(500).json({ message: 'Chyba serveru při generování dodacího listu.' });
+  }
+};

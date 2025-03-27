@@ -169,7 +169,7 @@ const BatchRentalReturnForm = () => {
       const returns = [];
       for (const returnItem of batchReturns) {
         const response = await axios.post(
-          `/orders/${selectedOrder}/rentals/${returnItem.rental_id}/return`, 
+          `${API_URL}/orders/${selectedOrder}/rentals/${returnItem.rental_id}/return`, 
           returnItem
         );
         returns.push(response.data);
