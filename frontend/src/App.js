@@ -25,6 +25,7 @@ import OrderList from './pages/orders/OrderList';
 import OrderDetail from './pages/orders/OrderDetail';
 import OrderForm from './pages/orders/OrderForm';
 import AddRentalForm from './pages/orders/AddRentalForm';
+import BatchRentalReturnForm from './pages/orders/BatchRentalReturnForm';
 
 // Dokumenty
 import DeliveryNote from './pages/orders/DeliveryNote';
@@ -77,7 +78,7 @@ function App() {
                 {/* Nové cesty pro hromadné dodací listy */}
                 <Route path="/orders/batch-rentals/:batch_id/delivery-note" element={<BatchDeliveryNote />} />
                 <Route path="/orders/batch-returns/:batch_id/delivery-note" element={<BatchReturnNote />} />
-
+                <Route path="/orders/batch-return" element={<BatchRentalReturnForm />} />
                 {/* Chybějící stránka */}
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>

@@ -1,201 +1,181 @@
-import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Badge, ListGroup, Alert, Table } from 'react-bootstrap';
-import { Link, useParams, useNavigate } from 'react-router-dom';
-import { FaFileInvoiceDollar, FaFileAlt, FaPlus, FaEdit, FaTrash, FaArrowLeft, FaUndo } from 'react-icons/fa';
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  Container, 
+  Row, 
+  Col, 
+  Card, 
+  Button, 
+  Badge, 
+  ListGroup, 
+  Alert, 
+  Table,
+  Modal,
+  Spinner
+} from 'react-bootstrap';
+import { 
+  Link, 
+  useParams, 
+  useNavigate 
+} from 'react-router-dom';
 import axios from 'axios';
-import { API_URL, formatDate, formatCurrency, ORDER_STATUS, RENTAL_STATUS } from '../../config';
+import { 
+  API_URL, 
+  formatDate, 
+  formatCurrency, 
+  ORDER_STATUS, 
+  RENTAL_STATUS 
+} from '../../config';
 import { useAuth } from '../../context/AuthContext';
+import { 
+  FaPlus, 
+  FaEdit, 
+  FaTrash, 
+  FaArrowLeft, 
+  FaUndo,
+  FaEye
+} from 'react-icons/fa';
+
 import RentalReturnModal from './RentalReturnModal';
+import BatchRentalForm from './AddRentalForm';
 
 const OrderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // Stavy pro data zakázky
   const [order, setOrder] = useState(null);
   const [rentals, setRentals] = useState([]);
+  const [returns, setReturns] = useState([]);
+  const [billingData, setBillingData] = useState([]);
+
+  // Stavy pro modální okna
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [showAddRentalModal, setShowAddRentalModal] = useState(false);
+  const [selectedRental, setSelectedRental] = useState(null);
+
+  // Stavy pro zpracování
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // Stav pro modální okno vrácení výpůjčky
-  const [showReturnModal, setShowReturnModal] = useState(false);
-  const [selectedRental, setSelectedRental] = useState(null);
-  
-  // Stav pro získání informací o fakturačních podkladech
-  const [billingData, setBillingData] = useState([]);
-  const [loadingBillingData, setLoadingBillingData] = useState(false);
-  
-  // Stav pro seskupování výpůjček podle batch_id
-  const [groupedRentals, setGroupedRentals] = useState({});
-  
-  const fetchOrderDetail = async () => {
+
+  // Načtení kompletních dat zakázky
+  const fetchOrderDetails = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_URL}/orders/${id}`);
-      setOrder(response.data.order);
-      setRentals(response.data.rentals);
       
-      // Seskupení výpůjček podle batch_id pro zobrazení tlačítek hromadného dodacího listu
-      const grouped = {};
-      response.data.rentals.forEach(rental => {
-        if (rental.batch_id) {
-          if (!grouped[rental.batch_id]) {
-            grouped[rental.batch_id] = [];
-          }
-          grouped[rental.batch_id].push(rental);
-        }
-      });
-      setGroupedRentals(grouped);
-      
-      setLoading(false);
-      
-      // Také načteme fakturační podklady
-      fetchBillingData();
+      // Paralelní načítání dat
+      const [
+        orderResponse, 
+        rentalsResponse, 
+        returnsResponse, 
+        billingResponse
+      ] = await Promise.all([
+        axios.get(`${API_URL}/orders/${id}`),
+        axios.get(`${API_URL}/orders/${id}/rentals`),
+        axios.get(`${API_URL}/orders/${id}/returns`),
+        axios.get(`${API_URL}/orders/${id}/billing-data`)
+      ]);
+
+      setOrder(orderResponse.data.order);
+      setRentals(rentalsResponse.data.rentals);
+      setReturns(returnsResponse.data.returns);
+      setBillingData(billingResponse.data.billingData);
     } catch (error) {
       console.error('Chyba při načítání dat:', error);
-      setError('Nepodařilo se načíst data. Zkuste to prosím později.');
+      setError('Nepodařilo se načíst detail zakázky.');
+    } finally {
       setLoading(false);
     }
-  };
-  
-  // Načtení fakturačních podkladů
-  const fetchBillingData = async () => {
-    try {
-      setLoadingBillingData(true);
-      const response = await axios.get(`${API_URL}/orders/${id}/billing-data`);
-      setBillingData(response.data.billingData || []);
-      setLoadingBillingData(false);
-    } catch (error) {
-      console.error('Chyba při načítání fakturačních podkladů:', error);
-      // Není kritická chyba, jen zobrazíme prázdný seznam
-      setBillingData([]);
-      setLoadingBillingData(false);
-    }
-  };
-  
-  useEffect(() => {
-    fetchOrderDetail();
   }, [id]);
-  
-  const handleDelete = async () => {
-    if (!window.confirm('Opravdu chcete smazat tuto zakázku?')) {
-      return;
-    }
-    
-    try {
-      await axios.delete(`${API_URL}/orders/${id}`);
-      alert('Zakázka byla úspěšně smazána.');
-      navigate('/orders');
-    } catch (error) {
-      console.error('Chyba při mazání zakázky:', error);
-      alert(error.response?.data?.message || 'Chyba při mazání zakázky.');
-    }
-  };
-  
-  // Otevření modálního okna pro vrácení výpůjčky
-  const handleReturnClick = (rental) => {
-    setSelectedRental(rental);
-    setShowReturnModal(true);
-  };
-  
-  // Zpracování vrácení výpůjčky
-  const handleReturnRental = async (rentalId, returnData) => {
-    try {
-      const response = await axios.post(`${API_URL}/orders/${id}/rentals/${rentalId}/return`, returnData);
-      
-      // Aktualizace dat po úspěšném vrácení
-      fetchOrderDetail();
-      
-      return response.data; // Vracíme data odpovědi pro získání ID vratky
-    } catch (error) {
-      console.error('Chyba při vracení výpůjčky:', error);
-      throw error;
-    }
-  };
-  
+
+  // Inicializace dat při načtení komponenty
+  useEffect(() => {
+    fetchOrderDetails();
+  }, [fetchOrderDetails]);
+
   // Výpočet celkové ceny zakázky
   const calculateTotalPrice = () => {
-    if (!rentals || rentals.length === 0) return 0;
-    
     return rentals.reduce((total, rental) => {
-      // Počet dní výpůjčky
-      let days = 1; // Minimálně 1 den
+      const days = rental.actual_return_date 
+        ? Math.max(1, Math.ceil((new Date(rental.actual_return_date) - new Date(rental.issue_date)) / (1000 * 60 * 60 * 24)))
+        : Math.max(1, Math.ceil((new Date() - new Date(rental.issue_date)) / (1000 * 60 * 60 * 24)));
       
-      if (rental.actual_return_date && rental.issue_date) {
-        // Pokud je výpůjčka vrácena, použijeme skutečnou délku
-        const issueDate = new Date(rental.issue_date);
-        const returnDate = new Date(rental.actual_return_date);
-        days = Math.ceil((returnDate - issueDate) / (1000 * 60 * 60 * 24));
-      } else if (rental.planned_return_date && rental.issue_date) {
-        // Jinak použijeme plánovanou délku
-        const issueDate = new Date(rental.issue_date);
-        const returnDate = new Date(rental.planned_return_date);
-        days = Math.ceil((returnDate - issueDate) / (1000 * 60 * 60 * 24));
-      }
-      
-      // Zajistíme, že počet dní je alespoň 1
-      days = Math.max(1, days);
-      
-      // Výpočet ceny za výpůjčku (denní sazba * počet dní * množství)
-      const quantity = rental.quantity || 1;
-      const dailyRate = parseFloat(rental.daily_rate) || 0;
-      return total + (days * dailyRate * quantity);
+      return total + (rental.daily_rate * (rental.quantity || 1) * days);
     }, 0);
   };
-  
+
+  // Smazání zakázky
+  const handleDeleteOrder = async () => {
+    if (!window.confirm('Opravdu chcete smazat tuto zakázku?')) return;
+
+    try {
+      await axios.delete(`${API_URL}/orders/${id}`);
+      navigate('/orders');
+    } catch (error) {
+      alert(error.response?.data?.message || 'Chyba při mazání zakázky');
+    }
+  };
+
+  // Renderování loading stavu
   if (loading) {
     return (
-      <Container>
-        <Alert variant="info">Načítání dat...</Alert>
+      <Container className="text-center my-5">
+        <Spinner animation="border" variant="primary" />
+        <p className="mt-3">Načítání detailu zakázky...</p>
       </Container>
     );
   }
-  
+
+  // Renderování chyby
   if (error) {
     return (
       <Container>
         <Alert variant="danger">{error}</Alert>
+        <Button 
+          variant="secondary" 
+          onClick={() => navigate('/orders')}
+        >
+          Zpět na seznam zakázek
+        </Button>
       </Container>
     );
   }
-  
-  if (!order) {
-    return (
-      <Container>
-        <Alert variant="warning">Zakázka nebyla nalezena.</Alert>
-      </Container>
-    );
-  }
-  
+
+  // Renderování detail zakázky
   return (
     <Container>
-      <Row className="mb-4">
+      {/* Hlavička sekce */}
+      <Row className="mb-4 align-items-center">
         <Col>
-          <h1>Detail zakázky #{order.order_number}</h1>
+          <h1>Zakázka č. {order.order_number}</h1>
+          <Badge 
+            bg={ORDER_STATUS[order.status].color} 
+            className="fs-6"
+          >
+            {ORDER_STATUS[order.status].label}
+          </Badge>
         </Col>
-        <Col xs="auto">
+        <Col className="text-end">
           <Button 
-            as={Link} 
-            to="/orders" 
             variant="outline-secondary" 
+            onClick={() => navigate('/orders')} 
             className="me-2"
           >
-            <FaArrowLeft className="me-1" /> Zpět na seznam
+            <FaArrowLeft className="me-1" /> Zpět
           </Button>
-          
           {user?.role === 'admin' && (
             <>
               <Button 
-                as={Link} 
-                to={`/orders/edit/${id}`} 
                 variant="primary" 
+                as={Link} 
+                to={`/orders/edit/${id}`}
                 className="me-2"
               >
                 <FaEdit className="me-1" /> Upravit
               </Button>
-              
               <Button 
                 variant="danger" 
-                onClick={handleDelete}
+                onClick={handleDeleteOrder}
               >
                 <FaTrash className="me-1" /> Smazat
               </Button>
@@ -203,192 +183,282 @@ const OrderDetail = () => {
           )}
         </Col>
       </Row>
-      
+
       <Row>
+        {/* Levý sloupec - základní informace */}
         <Col md={6}>
-          <Card className="mb-4">
+          <Card className="mb-3">
             <Card.Header>
               <h5 className="mb-0">Základní informace</h5>
             </Card.Header>
             <ListGroup variant="flush">
               <ListGroup.Item>
-                <strong>Číslo zakázky:</strong> {order.order_number}
-              </ListGroup.Item>
-              <ListGroup.Item>
-                <strong>Stav:</strong>{' '}
-                <Badge bg={ORDER_STATUS[order.status].color}>
-                  {ORDER_STATUS[order.status].label}
-                </Badge>
-              </ListGroup.Item>
-              <ListGroup.Item>
-                <strong>Zákazník:</strong> {order.customer_name}
-              </ListGroup.Item>
-              <ListGroup.Item>
-                <strong>Kontakt:</strong> {order.customer_email || '-'} | {order.customer_phone || '-'}
+                <strong>Zákazník:</strong>{' '}
+                <Link to={`/customers/${order.customer_id}`}>
+                  {order.customer_name}
+                </Link>
               </ListGroup.Item>
               <ListGroup.Item>
                 <strong>Datum vytvoření:</strong> {formatDate(order.creation_date)}
               </ListGroup.Item>
               <ListGroup.Item>
-                <strong>Předpokládaný konec:</strong> {formatDate(order.estimated_end_date) || 'Neurčeno'}
+                <strong>Předpokládaný konec:</strong>{' '}
+                {formatDate(order.estimated_end_date) || 'Neurčeno'}
               </ListGroup.Item>
               <ListGroup.Item>
-                <strong>Celková cena:</strong> {formatCurrency(calculateTotalPrice())}
+                <strong>Celková cena:</strong>{' '}
+                {formatCurrency(calculateTotalPrice())}
               </ListGroup.Item>
             </ListGroup>
           </Card>
-          
-          <Card className="mb-4">
-            <Card.Header className="d-flex justify-content-between align-items-center">
-              <h5 className="mb-0">Dokumenty</h5>
-            </Card.Header>
-            <Card.Body>
-              <div className="d-grid gap-2">
-                <Button
-                  variant="outline-primary"
-                  as={Link}
-                  to={`/orders/${id}/delivery-note`}
-                >
-                  <FaFileAlt className="me-2" /> Generovat dodací list zakázky
-                </Button>
-                
-                <Button
-                  variant="outline-success"
-                  as={Link}
-                  to={`/orders/${id}/billing-data`}
-                >
-                  <FaFileInvoiceDollar className="me-2" /> Generovat podklad pro fakturaci
-                </Button>
-              </div>
-              
-              {/* Sekce pro hromadné dodací listy podle batch_id */}
-              {Object.keys(groupedRentals).length > 0 && (
-                <div className="mt-3">
-                  <h6>Hromadné dodací listy výpůjček:</h6>
-                  <ListGroup>
-                    {Object.entries(groupedRentals).map(([batchId, items]) => (
-                      <ListGroup.Item key={batchId} action as={Link} to={`/orders/batch-rentals/${batchId}/delivery-note`}>
-                        {formatDate(items[0].issue_date)} - {items.length} položek
-                      </ListGroup.Item>
-                    ))}
-                  </ListGroup>
-                </div>
-              )}
-              
-              {billingData.length > 0 && (
-                <div className="mt-3">
-                  <h6>Fakturační podklady:</h6>
-                  <ListGroup>
-                    {billingData.map(item => (
-                      <ListGroup.Item key={item.id} action as={Link} to={`/orders/${id}/billing-data/${item.id}`}>
-                        {item.invoice_number} ({formatDate(item.billing_date)}) - {formatCurrency(item.total_amount)}
-                      </ListGroup.Item>
-                    ))}
-                  </ListGroup>
-                </div>
-              )}
-            </Card.Body>
-          </Card>
-          
-          <Card>
+
+          {/* Poznámky */}
+          <Card className="mb-3">
             <Card.Header>
               <h5 className="mb-0">Poznámky</h5>
             </Card.Header>
             <Card.Body>
-              {order.notes || 'Žádné poznámky.'}
+              {order.notes || 'Žádné poznámky'}
             </Card.Body>
           </Card>
+
+          {/* Vratky */}
+          {returns.length > 0 && (
+            <Card className="mb-3">
+              <Card.Header>
+                <h5 className="mb-0">Vratky</h5>
+              </Card.Header>
+              <Table responsive hover>
+                <thead>
+                  <tr>
+                    <th>Vybavení</th>
+                    <th>Datum vrácení</th>
+                    <th>Stav</th>
+                    <th>Dodatečné poplatky</th>
+                    <th>Akce</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {returns.map(returnItem => (
+                    <tr key={returnItem.id}>
+                      <td>{returnItem.equipment_name}</td>
+                      <td>{formatDate(returnItem.return_date)}</td>
+                      <td>
+                        <Badge 
+                          bg={
+                            returnItem.condition === 'ok' ? 'success' :
+                            returnItem.condition === 'damaged' ? 'warning' :
+                            returnItem.condition === 'missing' ? 'danger' : 'secondary'
+                          }
+                        >
+                          {returnItem.condition === 'ok' ? 'V pořádku' :
+                           returnItem.condition === 'damaged' ? 'Poškozeno' :
+                           returnItem.condition === 'missing' ? 'Chybí' : returnItem.condition}
+                        </Badge>
+                      </td>
+                      <td>{formatCurrency(returnItem.additional_charges || 0)}</td>
+                      <td>
+                        <Button 
+                          variant="outline-primary" 
+                          size="sm"
+                          as={Link}
+                          to={`/orders/returns/${returnItem.id}`}
+                        >
+                          <FaEye className="me-1" /> Detail
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </Card>
+          )}
         </Col>
-        
+
+        {/* Pravý sloupec - výpůjčky a akce */}
         <Col md={6}>
-          <Card>
+          {/* Sekce výpůjček */}
+          <Card className="mb-3">
             <Card.Header className="d-flex justify-content-between align-items-center">
-              <h5 className="mb-0">Vypůjčené vybavení</h5>
+              <h5 className="mb-0">Výpůjčky</h5>
               {user?.role === 'admin' && order.status !== 'completed' && (
-                <Button 
-                  as={Link} 
-                  to={`/orders/${id}/add-rental`} 
-                  variant="primary" 
-                  size="sm"
-                >
-                  <FaPlus className="me-1" /> Přidat výpůjčku
-                </Button>
+                <div>
+                  <Button 
+                    variant="primary" 
+                    size="sm"
+                    onClick={() => setShowAddRentalModal(true)}
+                    className="me-2"
+                  >
+                    <FaPlus className="me-1" /> Přidat výpůjčku
+                  </Button>
+                  <Button 
+                    variant="warning" 
+                    size="sm"
+                    as={Link}
+                    to="/orders/batch-return"
+                  >
+                    <FaUndo className="me-1" /> Hromadná vratka
+                  </Button>
+                </div>
               )}
             </Card.Header>
-            <Card.Body>
-              {rentals.length === 0 ? (
-                <Alert variant="info">
-                  Zakázka zatím neobsahuje žádné výpůjčky.
-                </Alert>
-              ) : (
-                <Table responsive hover size="sm">
-                  <thead>
-                    <tr>
-                      <th>Vybavení</th>
-                      <th>Množství</th>
-                      <th>Vydáno</th>
-                      <th>Plánované vrácení</th>
-                      <th>Stav</th>
-                      <th>Akce</th>
+            <Table responsive hover>
+              <thead>
+                <tr>
+                  <th>Vybavení</th>
+                  <th>Množství</th>
+                  <th>Datum</th>
+                  <th>Stav</th>
+                  <th>Akce</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rentals.map(rental => (
+                  <tr key={rental.id}>
+                    <td>{rental.equipment_name}</td>
+                    <td>{rental.quantity || 1} ks</td>
+                    <td>{formatDate(rental.issue_date)}</td>
+                    <td>
+                      <Badge bg={RENTAL_STATUS[rental.status].color}>
+                        {RENTAL_STATUS[rental.status].label}
+                      </Badge>
+                    </td>
+                    <td>
+                      <Button 
+                        variant="outline-primary" 
+                        size="sm"
+                        onClick={() => {
+                          setSelectedRental(rental);
+                          setShowReturnModal(true);
+                        }}
+                        disabled={rental.status === 'returned'}
+                      >
+                        <FaUndo className="me-1" /> Vrátit
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </Card>
+
+          {/* Fakturační údaje */}
+          {billingData.length > 0 && (
+            <Card className="mb-3">
+              <Card.Header>
+                <h5 className="mb-0">Fakturační podklady</h5>
+              </Card.Header>
+              <Table responsive hover>
+                <thead>
+                  <tr>
+                    <th>Číslo faktury</th>
+                    <th>Datum</th>
+                    <th>Celková částka</th>
+                    <th>Stav</th>
+                    <th>Akce</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {billingData.map(billing => (
+                    <tr key={billing.id}>
+                      <td>{billing.invoice_number}</td>
+                      <td>{formatDate(billing.billing_date)}</td>
+                      <td>{formatCurrency(billing.total_amount)}</td>
+                      <td>
+                        <Badge 
+                          bg={
+                            billing.status === 'paid' ? 'success' :
+                            billing.status === 'created' ? 'secondary' :
+                            billing.status === 'sent' ? 'primary' :
+                            billing.status === 'overdue' ? 'danger' : 'warning'
+                          }
+                        >
+                          {billing.status === 'paid' ? 'Zaplaceno' :
+                           billing.status === 'created' ? 'Vytvořeno' :
+                           billing.status === 'sent' ? 'Odesláno' :
+                           billing.status === 'overdue' ? 'Po splatnosti' : billing.status}
+                        </Badge>
+                      </td>
+                      <td>
+                        <Button 
+                          variant="outline-primary" 
+                          size="sm"
+                          as={Link}
+                          to={`/orders/${id}/billing-data/${billing.id}`}
+                        >
+                          <FaEye className="me-1" /> Detail
+                        </Button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {rentals.map(rental => (
-                      <tr key={rental.id}>
-                        <td>{rental.equipment_name}</td>
-                        <td>{rental.quantity || 1} ks</td>
-                        <td>{formatDate(rental.issue_date) || '-'}</td>
-                        <td>{formatDate(rental.planned_return_date) || '-'}</td>
-                        <td>
-                          <Badge bg={RENTAL_STATUS[rental.status].color}>
-                            {RENTAL_STATUS[rental.status].label}
-                          </Badge>
-                        </td>
-                        <td>
-                          <div className="d-flex gap-1">
-                            {/* Pouze zobrazujeme odkaz na hromadný dodací list, když je k dispozici batch_id */}
-                            {rental.batch_id && (
-                              <Button
-                                as={Link}
-                                to={`/orders/batch-rentals/${rental.batch_id}/delivery-note`}
-                                variant="outline-info"
-                                size="sm"
-                                title="Dodací list výpůjčky"
-                              >
-                                <FaFileAlt />
-                              </Button>
-                            )}
-                            
-                            {/* Tlačítko pro vrácení výpůjčky */}
-                            {user?.role === 'admin' && rental.status !== 'returned' && order.status !== 'completed' && (
-                              <Button
-                                variant="outline-primary"
-                                size="sm"
-                                onClick={() => handleReturnClick(rental)}
-                                title="Vrátit výpůjčku"
-                              >
-                                <FaUndo />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              )}
+                  ))}
+                </tbody>
+              </Table>
+            </Card>
+          )}
+
+          {/* Sekce dokumentů */}
+          <Card>
+            <Card.Header>
+              <h5 className="mb-0">Dokumenty</h5>
+            </Card.Header>
+            <Card.Body>
+              <div className="d-grid gap-2">
+                <Button 
+                  variant="outline-primary"
+                  as={Link}
+                  to={`/orders/${id}/delivery-note`}
+                >
+                  Dodací list
+                </Button>
+                <Button 
+                  variant="outline-success"
+                  as={Link}
+                  to={`/orders/${id}/billing-data`}
+                >
+                  Fakturační podklady
+                </Button>
+              </div>
             </Card.Body>
           </Card>
         </Col>
       </Row>
-      
-      {/* Modální okno pro vrácení výpůjčky */}
-      <RentalReturnModal
+
+      {/* Modální okna */}
+{/* Modální okna */}
+<RentalReturnModal
         show={showReturnModal}
         onHide={() => setShowReturnModal(false)}
         rental={selectedRental}
-        onReturn={handleReturnRental}
+        onReturn={async (rentalId, returnData) => {
+          try {
+            await axios.post(`${API_URL}/orders/${id}/rentals/${rentalId}/return`, returnData);
+            fetchOrderDetails();
+            setShowReturnModal(false);
+          } catch (error) {
+            console.error('Chyba při vracení:', error);
+            alert('Nepodařilo se vrátit výpůjčku');
+          }
+        }}
       />
+
+      <Modal 
+        show={showAddRentalModal} 
+        onHide={() => setShowAddRentalModal(false)}
+        size="xl"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Přidat výpůjčku</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <BatchRentalForm 
+            initialOrderId={id}
+            onSuccess={() => {
+              fetchOrderDetails();
+              setShowAddRentalModal(false);
+            }}
+          />
+        </Modal.Body>
+      </Modal>
     </Container>
   );
 };

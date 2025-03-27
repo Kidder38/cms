@@ -38,6 +38,18 @@ const Navigation = () => {
                   )}
                 </NavDropdown>
                 
+                {/* Menu pro zakázky */}
+                <NavDropdown title="Zakázky" id="orders-dropdown">
+                  <NavDropdown.Item as={Link} to="/orders">Seznam zakázek</NavDropdown.Item>
+                  {user?.role === 'admin' && (
+                    <>
+                      <NavDropdown.Divider />
+                      <NavDropdown.Item as={Link} to="/orders/new">Přidat zakázku</NavDropdown.Item>
+                      <NavDropdown.Item as={Link} to="/orders/batch-return">Hromadná vratka</NavDropdown.Item>
+                    </>
+                  )}
+                </NavDropdown>
+                
                 {/* Menu pro zákazníky */}
                 <NavDropdown title="Zákazníci" id="customers-dropdown">
                   <NavDropdown.Item as={Link} to="/customers">Seznam zákazníků</NavDropdown.Item>
@@ -48,19 +60,6 @@ const Navigation = () => {
                     </>
                   )}
                 </NavDropdown>
-                
-                {/* Menu pro zakázky */}
-                <NavDropdown title="Zakázky" id="orders-dropdown">
-                  <NavDropdown.Item as={Link} to="/orders">Seznam zakázek</NavDropdown.Item>
-                  {user?.role === 'admin' && (
-                    <>
-                      <NavDropdown.Divider />
-                      <NavDropdown.Item as={Link} to="/orders/new">Přidat zakázku</NavDropdown.Item>
-                    </>
-                  )}
-                </NavDropdown>
-                
-                {/* Později přidáme další menu */}
               </>
             )}
           </Nav>
