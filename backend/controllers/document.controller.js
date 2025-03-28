@@ -156,6 +156,10 @@ exports.generateBillingData = async (req, res) => {
     // Výpočet fakturačních položek pro každou výpůjčku
     const billingItems = [];
     
+    // Inicializace proměnných pro období fakturace
+    let periodFrom = null;
+    let periodTo = null;
+    
     for (const rental of rentalsResult.rows) {
       // Určení počtu dní pro fakturaci
       const issueDate = new Date(rental.issue_date);
@@ -169,6 +173,15 @@ exports.generateBillingData = async (req, res) => {
         if (plannedReturnDate < returnDate && !rental.actual_return_date) {
           returnDate = plannedReturnDate;
         }
+      }
+      
+      // Aktualizace rozsahu období fakturace
+      if (periodFrom === null || issueDate < periodFrom) {
+        periodFrom = issueDate;
+      }
+      
+      if (periodTo === null || returnDate > periodTo) {
+        periodTo = returnDate;
       }
       
       // Výpočet počtu dní
@@ -201,6 +214,39 @@ exports.generateBillingData = async (req, res) => {
     // Výpočet celkové ceny za všechny položky
     const totalAmount = billingItems.reduce((sum, item) => sum + item.total_price, 0);
     
+    // Formátování datumů období
+    const periodFromFormatted = periodFrom ? periodFrom.toISOString().split('T')[0] : null;
+    const periodToFormatted = periodTo ? periodTo.toISOString().split('T')[0] : null;
+    
+    // Kontrola, zda už neexistuje fakturační podklad pro dané období
+    if (periodFromFormatted && periodToFormatted) {
+      const existingBillingCheck = await db.query(`
+        SELECT id, invoice_number, billing_date, billing_period_from, billing_period_to
+        FROM billing_data
+        WHERE order_id = $1
+          AND (
+            (billing_period_from <= $2 AND billing_period_to >= $2) OR
+            (billing_period_from <= $3 AND billing_period_to >= $3) OR
+            (billing_period_from >= $2 AND billing_period_to <= $3)
+          )
+      `, [order_id, periodFromFormatted, periodToFormatted]);
+
+      // Pokud najdeme překrývající se období, vrátíme chybu
+      if (existingBillingCheck.rows.length > 0) {
+        const existingBilling = existingBillingCheck.rows[0];
+        return res.status(400).json({ 
+          message: `Pro toto období už existuje fakturační podklad (č. ${existingBilling.invoice_number} z ${existingBilling.billing_date}). 
+                    Období ${existingBilling.billing_period_from} - ${existingBilling.billing_period_to} se překrývá 
+                    s požadovaným obdobím ${periodFromFormatted} - ${periodToFormatted}.`,
+          existingBilling: existingBillingCheck.rows[0],
+          requestedPeriod: {
+            from: periodFromFormatted,
+            to: periodToFormatted
+          }
+        });
+      }
+    }
+    
     // Vytvoření struktury fakturačního podkladu
     const billingData = {
       order: order,
@@ -208,7 +254,9 @@ exports.generateBillingData = async (req, res) => {
       items: billingItems,
       total_amount: totalAmount,
       invoice_number: `INV-${order.order_number}-${formattedBillingDate.replace(/-/g, '')}`,
-      note: `Fakturační podklad vygenerován ${new Date().toISOString().split('T')[0]}`
+      note: `Fakturační podklad vygenerován ${new Date().toISOString().split('T')[0]}`,
+      period_from: periodFromFormatted,
+      period_to: periodToFormatted
     };
     
     // Uložíme fakturační podklad do databáze pro pozdější použití
@@ -219,9 +267,11 @@ exports.generateBillingData = async (req, res) => {
         billing_date,
         total_amount,
         is_final_billing,
-        notes
+        notes,
+        billing_period_from,
+        billing_period_to
       )
-      VALUES ($1, $2, $3, $4, $5, $6)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id
     `, [
       order_id,
@@ -229,7 +279,9 @@ exports.generateBillingData = async (req, res) => {
       billingData.billing_date,
       billingData.total_amount,
       is_final_billing || false,
-      billingData.note
+      billingData.note,
+      billingData.period_from,
+      billingData.period_to
     ]);
     
     const billingId = billingResult.rows[0].id;
@@ -293,7 +345,8 @@ exports.getBillingDataByOrder = async (req, res) => {
     
     // Načtení fakturačních podkladů
     const billingResult = await db.query(`
-      SELECT *
+      SELECT id, invoice_number, billing_date, total_amount, is_final_billing, status, created_at,
+             billing_period_from, billing_period_to
       FROM billing_data
       WHERE order_id = $1
       ORDER BY billing_date DESC

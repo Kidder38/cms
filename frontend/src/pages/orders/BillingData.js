@@ -4,10 +4,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { FaPrint, FaDownload, FaArrowLeft, FaCalculator } from 'react-icons/fa';
 import axios from 'axios';
 import { API_URL, formatDate, formatCurrency, ORDER_STATUS } from '../../config';
+import { useAuth } from '../../context/AuthContext';
 import { useReactToPrint } from 'react-to-print';
 
 const BillingData = () => {
-  const { order_id } = useParams();
+  const { order_id, billing_id } = useParams();
   const navigate = useNavigate();
   const printRef = useRef();
   
@@ -30,6 +31,13 @@ const BillingData = () => {
         setLoading(true);
         const response = await axios.get(`${API_URL}/orders/${order_id}`);
         setOrder(response.data.order);
+        
+        // Pokud máme billing_id, načteme konkrétní fakturační podklad
+        if (billing_id) {
+          const billingResponse = await axios.get(`${API_URL}/orders/${order_id}/billing-data/${billing_id}`);
+          setBillingData(billingResponse.data.billingData);
+        }
+        
         setLoading(false);
       } catch (error) {
         console.error('Chyba při načítání zakázky:', error);
@@ -39,7 +47,7 @@ const BillingData = () => {
     };
     
     fetchOrderData();
-  }, [order_id]);
+  }, [order_id, billing_id]);
   
   // Změna hodnot v nastavení fakturace
   const handleOptionChange = (e) => {
@@ -77,7 +85,28 @@ const BillingData = () => {
       setLoading(false);
     } catch (error) {
       console.error('Chyba při generování fakturačních podkladů:', error);
-      setError('Nepodařilo se vygenerovat fakturační podklady. Zkuste to prosím později.');
+      
+      // Speciální zpracování chyby o duplicitním období
+      if (error.response?.status === 400 && error.response?.data?.existingBilling) {
+        const existingBilling = error.response.data.existingBilling;
+        const reqPeriod = error.response.data.requestedPeriod;
+        
+        setError(
+          <div>
+            <p>Nelze vytvořit fakturační podklad, protože se překrývá s existujícím:</p>
+            <ul>
+              <li><strong>Existující faktura:</strong> {existingBilling.invoice_number}</li>
+              <li><strong>Datum vystavení:</strong> {formatDate(existingBilling.billing_date)}</li>
+              <li><strong>Období:</strong> {formatDate(existingBilling.billing_period_from)} - {formatDate(existingBilling.billing_period_to)}</li>
+            </ul>
+            <p>Požadované období ({formatDate(reqPeriod.from)} - {formatDate(reqPeriod.to)}) se překrývá s výše uvedeným obdobím.</p>
+            <p>Zvolte prosím jiné datum fakturace nebo upravte dostupné výpůjčky.</p>
+          </div>
+        );
+      } else {
+        setError('Nepodařilo se vygenerovat fakturační podklad. ' + (error.response?.data?.message || 'Zkuste to prosím později.'));
+      }
+      
       setLoading(false);
     }
   };
@@ -137,7 +166,7 @@ const BillingData = () => {
       {!billingData && (
         <Card className="mb-4">
           <Card.Header>
-            <h5>Nastavení fakturace</h5>
+            <h5 className="mb-0">Nastavení fakturace</h5>
           </Card.Header>
           <Card.Body>
             <Row>
@@ -160,8 +189,22 @@ const BillingData = () => {
                       Konec měsíce
                     </Button>
                   </div>
+                  <Form.Text className="text-muted">
+                    Fakturační období (od-do) bude automaticky určeno na základě dat výpůjček.
+                    Systém zabrání vytvoření duplicitního podkladu pro již fakturované období.
+                  </Form.Text>
                 </Form.Group>
               </Col>
+              <Col md={6}>
+                <Alert variant="info" className="mb-3">
+                  <strong>Poznámka:</strong> Systém automaticky kontroluje, zda pro dané období již neexistuje
+                  fakturační podklad. Pokud se budou období překrývat, vytvoření nového podkladu bude zamítnuto,
+                  aby nedošlo k dvojí fakturaci stejných položek.
+                </Alert>
+              </Col>
+            </Row>
+            
+            <Row>
               <Col md={6}>
                 <Form.Group className="mb-3">
                   <Form.Check
@@ -348,13 +391,22 @@ const BillingData = () => {
                 <p>{billingData.note || billingData.order.notes || 'Bez poznámek'}</p>
               </div>
               
-              {/* Datum splatnosti */}
+              {/* Informace o fakturačním období */}
               <div className="mb-4">
                 <Row>
-                  <Col md={6}>
+                  <Col md={4}>
                     <p><strong>Datum vystavení:</strong> {formatDate(billingData.billing_date)}</p>
                   </Col>
-                  <Col md={6}>
+                  <Col md={4}>
+                    <p><strong>Fakturační období:</strong>{' '}
+                      {billingData.billing_period_from && billingData.billing_period_to ? (
+                        `${formatDate(billingData.billing_period_from)} - ${formatDate(billingData.billing_period_to)}`
+                      ) : (
+                        'Neuvedeno'
+                      )}
+                    </p>
+                  </Col>
+                  <Col md={4}>
                     <p><strong>Datum splatnosti:</strong> {formatDate(new Date(new Date(billingData.billing_date).getTime() + 14 * 24 * 60 * 60 * 1000))}</p>
                   </Col>
                 </Row>
