@@ -69,7 +69,7 @@ exports.getOrderById = async (req, res) => {
 
 // Vytvoření nové zakázky
 exports.createOrder = async (req, res) => {
-  const { customer_id, order_number, status, estimated_end_date, notes } = req.body;
+  const { customer_id, order_number, name, status, estimated_end_date, notes } = req.body;
   
   // Validace povinných polí
   if (!customer_id || isNaN(parseInt(customer_id))) {
@@ -78,6 +78,10 @@ exports.createOrder = async (req, res) => {
   
   if (!order_number) {
     return res.status(400).json({ message: 'Číslo zakázky je povinný údaj.' });
+  }
+  
+  if (!name) {
+    return res.status(400).json({ message: 'Název zakázky je povinný údaj.' });
   }
   
   try {
@@ -98,16 +102,18 @@ exports.createOrder = async (req, res) => {
     const result = await db.query(`
       INSERT INTO orders (
         customer_id, 
-        order_number, 
+        order_number,
+        name,
         status, 
         estimated_end_date, 
         notes
       ) 
-      VALUES ($1, $2, $3, $4, $5) 
+      VALUES ($1, $2, $3, $4, $5, $6) 
       RETURNING *
     `, [
       parseInt(customer_id),
       order_number,
+      name,
       status || 'created',
       estimated_end_date,
       notes
@@ -126,7 +132,7 @@ exports.createOrder = async (req, res) => {
 // Aktualizace zakázky
 exports.updateOrder = async (req, res) => {
   const { id } = req.params;
-  const { customer_id, order_number, status, estimated_end_date, notes } = req.body;
+  const { customer_id, order_number, name, status, estimated_end_date, notes } = req.body;
   
   // Validace ID zakázky
   if (!id || isNaN(parseInt(id))) {
@@ -143,6 +149,10 @@ exports.updateOrder = async (req, res) => {
   
   if (!order_number) {
     return res.status(400).json({ message: 'Číslo zakázky je povinný údaj.' });
+  }
+  
+  if (!name) {
+    return res.status(400).json({ message: 'Název zakázky je povinný údaj.' });
   }
   
   // Konverze ID na čísla
@@ -178,16 +188,18 @@ exports.updateOrder = async (req, res) => {
       UPDATE orders 
       SET 
         customer_id = $1, 
-        order_number = $2, 
-        status = $3, 
-        estimated_end_date = $4, 
-        notes = $5,
+        order_number = $2,
+        name = $3,
+        status = $4, 
+        estimated_end_date = $5, 
+        notes = $6,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $6 
+      WHERE id = $7 
       RETURNING *
     `, [
       customerId,
       order_number,
+      name,
       status,
       estimated_end_date,
       notes,

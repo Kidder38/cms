@@ -1,5 +1,7 @@
-// Základní URL pro API
-export const API_URL = 'http://localhost:5001/api';
+// Dynamické nastavení API URL podle prostředí
+export const API_URL = process.env.NODE_ENV === 'production' 
+  ? '/api'  // V produkci bude API na stejné doméně (relativní cesta)
+  : 'http://localhost:5001/api';  // Při vývoji použijeme localhost
 
 // Formátování data
 export const formatDate = (dateString) => {

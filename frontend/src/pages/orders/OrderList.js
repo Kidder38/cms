@@ -112,6 +112,7 @@ const OrderList = () => {
               <thead>
                 <tr>
                   <th>Číslo zakázky</th>
+                  <th>Název zakázky</th>
                   <th>Zákazník</th>
                   <th>Datum vytvoření</th>
                   <th>Předpokládaný konec</th>
@@ -123,6 +124,7 @@ const OrderList = () => {
                 {filteredOrders.map(order => (
                   <tr key={order.id}>
                     <td>{order.order_number}</td>
+                    <td>{order.name}</td>
                     <td>{order.customer_name}</td>
                     <td>{formatDate(order.creation_date)}</td>
                     <td>{formatDate(order.estimated_end_date) || '-'}</td>

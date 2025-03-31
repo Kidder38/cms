@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { API_URL, ORDER_STATUS } from '../../config';
+import { API_URL } from '../../config';
 
 const OrderForm = () => {
   const { id } = useParams();
@@ -12,6 +12,7 @@ const OrderForm = () => {
   const [formData, setFormData] = useState({
     customer_id: '',
     order_number: '',
+    name: '',
     status: 'created',
     estimated_end_date: '',
     notes: ''
@@ -47,6 +48,7 @@ const OrderForm = () => {
           setFormData({
             customer_id: orderData.customer_id.toString(),
             order_number: orderData.order_number,
+            name: orderData.name || '',
             status: orderData.status,
             estimated_end_date: orderData.estimated_end_date ? 
               new Date(orderData.estimated_end_date).toISOString().split('T')[0] : '',
@@ -169,6 +171,23 @@ const OrderForm = () => {
             </Row>
             
             <Row>
+              <Col md={12}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Název zakázky *</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    required
+                    disabled={loading}
+                    placeholder="Zadejte název zakázky"
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+            
+            <Row>
               <Col md={6}>
                 <Form.Group className="mb-3">
                   <Form.Label>Stav</Form.Label>
@@ -178,11 +197,10 @@ const OrderForm = () => {
                     onChange={handleChange}
                     disabled={loading}
                   >
-                    {Object.keys(ORDER_STATUS).map(key => (
-                      <option key={key} value={key}>
-                        {ORDER_STATUS[key].label}
-                      </option>
-                    ))}
+                    <option value="created">Vytvořeno</option>
+                    <option value="active">Aktivní</option>
+                    <option value="completed">Dokončeno</option>
+                    <option value="cancelled">Zrušeno</option>
                   </Form.Select>
                 </Form.Group>
               </Col>

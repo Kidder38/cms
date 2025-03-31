@@ -11,8 +11,15 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors());
+// CORS nastavení
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.FRONTEND_URL || true  // V produkci může být true (povolí vše) nebo konkrétní URL
+    : 'http://localhost:3000',          // Při vývoji React běží na portu 3000
+  credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -32,9 +39,21 @@ app.use('/api/customers', require('./routes/customer.routes'));
 app.use('/api/orders', require('./routes/order.routes'));
 app.use('/api/import', require('./routes/import.routes'));
 
+// Konfigurace pro produkci - servírování frontendu
+if (process.env.NODE_ENV === 'production') {
+  // Statické soubory z React buildu
+  app.use(express.static(path.join(__dirname, '../frontend/build')));
+  
+  // Všechny ostatní požadavky směrujeme na React app
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+  });
+}
+
 // Spuštění serveru
 app.listen(PORT, async () => {
   console.log(`Server běží na portu ${PORT}`);
+  console.log(`Prostředí: ${process.env.NODE_ENV || 'development'}`);
   
   // Otestování připojení k databázi
   await testConnection();

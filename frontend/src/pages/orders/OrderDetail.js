@@ -247,6 +247,7 @@ const OrderDetail = () => {
       <Row className="mb-4 align-items-center">
         <Col>
           <h1>Zakázka č. {order.order_number}</h1>
+          <h4 className="text-muted">{order.name}</h4>
           <Badge 
             bg={ORDER_STATUS[order.status].color} 
             className="fs-6"
@@ -283,6 +284,7 @@ const OrderDetail = () => {
         </Col>
       </Row>
 
+
       {/* Záložky pro lepší organizaci obsahu */}
       <Tabs
         activeKey={activeTab}
@@ -293,30 +295,33 @@ const OrderDetail = () => {
           <Row>
             {/* Levý sloupec - základní informace */}
             <Col md={6}>
-              <Card className="mb-3">
-                <Card.Header>
-                  <h5 className="mb-0">Základní informace</h5>
-                </Card.Header>
-                <ListGroup variant="flush">
-                  <ListGroup.Item>
-                    <strong>Zákazník:</strong>{' '}
-                    <Link to={`/customers/${order.customer_id}`}>
-                      {order.customer_name}
-                    </Link>
-                  </ListGroup.Item>
-                  <ListGroup.Item>
-                    <strong>Datum vytvoření:</strong> {formatDate(order.creation_date)}
-                  </ListGroup.Item>
-                  <ListGroup.Item>
-                    <strong>Předpokládaný konec:</strong>{' '}
-                    {formatDate(order.estimated_end_date) || 'Neurčeno'}
-                  </ListGroup.Item>
-                  <ListGroup.Item>
-                    <strong>Celková cena:</strong>{' '}
-                    {formatCurrency(calculateTotalPrice())}
-                  </ListGroup.Item>
-                </ListGroup>
-              </Card>
+            <Card className="mb-3">
+              <Card.Header>
+                <h5 className="mb-0">Základní informace</h5>
+              </Card.Header>
+              <ListGroup variant="flush">
+                <ListGroup.Item>
+                  <strong>Název:</strong> {order.name}
+                </ListGroup.Item>
+                <ListGroup.Item>
+                  <strong>Zákazník:</strong>{' '}
+                  <Link to={`/customers/${order.customer_id}`}>
+                    {order.customer_name}
+                  </Link>
+                </ListGroup.Item>
+                <ListGroup.Item>
+                  <strong>Datum vytvoření:</strong> {formatDate(order.creation_date)}
+                </ListGroup.Item>
+                <ListGroup.Item>
+                  <strong>Předpokládaný konec:</strong>{' '}
+                  {formatDate(order.estimated_end_date) || 'Neurčeno'}
+                </ListGroup.Item>
+                <ListGroup.Item>
+                  <strong>Celková cena:</strong>{' '}
+                  {formatCurrency(calculateTotalPrice())}
+                </ListGroup.Item>
+              </ListGroup>
+            </Card>
 
               {/* Poznámky */}
               <Card className="mb-3">

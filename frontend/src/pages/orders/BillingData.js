@@ -35,7 +35,16 @@ const BillingData = () => {
         // Pokud máme billing_id, načteme konkrétní fakturační podklad
         if (billing_id) {
           const billingResponse = await axios.get(`${API_URL}/orders/${order_id}/billing-data/${billing_id}`);
-          setBillingData(billingResponse.data.billingData);
+          // Zkontrolujeme, že data obsahují očekávanou strukturu
+          if (billingResponse.data && billingResponse.data.billingData) {
+            // Pokud v datech chybí odkaz na order, přidáme ho z již načteného objektu order
+            if (!billingResponse.data.billingData.order) {
+              billingResponse.data.billingData.order = response.data.order;
+            }
+            setBillingData(billingResponse.data.billingData);
+          } else {
+            setError('Nepodařilo se načíst fakturační podklad - neplatná data z API.');
+          }
         }
         
         setLoading(false);
@@ -65,10 +74,20 @@ const BillingData = () => {
       setError(null);
       
       const response = await axios.post(`${API_URL}/orders/${order_id}/billing-data`, billingOptions);
-      setBillingData(response.data.billingData);
+      
+      // Zkontrolujeme, že billingData existuje a má očekávanou strukturu
+      if (response.data && response.data.billingData) {
+        // Pokud v odpovědi chybí odkaz na order, přidáme ho z již načteného objektu order
+        if (!response.data.billingData.order && order) {
+          response.data.billingData.order = order;
+        }
+        setBillingData(response.data.billingData);
+      } else {
+        setError('Generování fakturačních podkladů vrátilo neplatná data.');
+      }
       
       // Pokud je to konečná fakturace a zakázka má být uzavřena
-      if (billingOptions.is_final_billing && order.status !== 'completed') {
+      if (billingOptions.is_final_billing && order?.status !== 'completed') {
         // Aktualizace stavu zakázky na 'completed'
         await axios.put(`${API_URL}/orders/${order_id}`, {
           ...order,
@@ -287,8 +306,8 @@ const BillingData = () => {
               {/* Záhlaví fakturačního podkladu */}
               <div className="text-center mb-4">
                 <h1>PODKLAD PRO FAKTURACI</h1>
-                <h4>č. {billingData.invoice_number}</h4>
-                <p>Datum vystavení: {formatDate(billingData.billing_date)}</p>
+                <h4>č. {billingData?.invoice_number || 'Neznámé'}</h4>
+                <p>Datum vystavení: {billingData?.billing_date ? formatDate(billingData.billing_date) : 'Neuvedeno'}</p>
                 {billingOptions.is_final_billing && (
                   <div className="badge bg-warning text-dark p-2 my-2">KONEČNÁ FAKTURACE</div>
                 )}
@@ -314,11 +333,11 @@ const BillingData = () => {
                   <div className="border p-3">
                     <h5>Odběratel:</h5>
                     <p>
-                      <strong>{billingData.order.customer_name}</strong><br />
-                      {billingData.order.customer_address || 'Adresa neuvedena'}<br />
-                      {billingData.order.ico ? `IČO: ${billingData.order.ico}` : ''}{billingData.order.ico && billingData.order.dic ? <br /> : ''}{billingData.order.dic ? `DIČ: ${billingData.order.dic}` : ''}{(billingData.order.ico || billingData.order.dic) ? <br /> : ''}
-                      {billingData.order.customer_phone ? `Tel: ${billingData.order.customer_phone}` : ''}{billingData.order.customer_phone ? <br /> : ''}
-                      {billingData.order.customer_email || ''}
+                      <strong>{billingData?.order?.customer_name || 'Zákazník nenalezen'}</strong><br />
+                      {billingData?.order?.customer_address || 'Adresa neuvedena'}<br />
+                      {billingData?.order?.ico ? `IČO: ${billingData.order.ico}` : ''}{billingData?.order?.ico && billingData?.order?.dic ? <br /> : ''}{billingData?.order?.dic ? `DIČ: ${billingData.order.dic}` : ''}{(billingData?.order?.ico || billingData?.order?.dic) ? <br /> : ''}
+                      {billingData?.order?.customer_phone ? `Tel: ${billingData.order.customer_phone}` : ''}{billingData?.order?.customer_phone ? <br /> : ''}
+                      {billingData?.order?.customer_email || ''}
                     </p>
                   </div>
                 </Col>
@@ -328,17 +347,21 @@ const BillingData = () => {
               <div className="mb-4">
                 <Row>
                   <Col md={4}>
-                    <p><strong>Číslo zakázky:</strong> {billingData.order.order_number}</p>
+                    <p><strong>Číslo zakázky:</strong> {billingData?.order?.order_number || 'Neznámé'}</p>
                   </Col>
                   <Col md={4}>
-                    <p><strong>Datum vytvoření zakázky:</strong> {formatDate(billingData.order.creation_date)}</p>
+                    <p><strong>Datum vytvoření zakázky:</strong> {billingData?.order?.creation_date ? formatDate(billingData.order.creation_date) : 'Neuvedeno'}</p>
                   </Col>
                   <Col md={4}>
                     <p>
                       <strong>Stav zakázky:</strong>{' '}
-                      <span className={`badge bg-${ORDER_STATUS[billingData.order.status].color}`}>
-                        {ORDER_STATUS[billingData.order.status].label}
-                      </span>
+                      {billingData?.order?.status ? (
+                        <span className={`badge bg-${ORDER_STATUS[billingData.order.status]?.color || 'secondary'}`}>
+                          {ORDER_STATUS[billingData.order.status]?.label || billingData.order.status}
+                        </span>
+                      ) : (
+                        'Neuvedeno'
+                      )}
                     </p>
                   </Col>
                 </Row>
@@ -362,24 +385,33 @@ const BillingData = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {billingData.items.map((item, index) => (
+                    {billingData?.items?.map((item, index) => (
                       <tr key={index}>
                         <td>{index + 1}</td>
-                        <td>{item.equipment_name}</td>
-                        <td>{item.inventory_number}</td>
-                        <td>{formatDate(item.issue_date)}</td>
-                        <td>{formatDate(item.return_date) || formatDate(item.planned_return_date) || formatDate(billingData.billing_date)}</td>
-                        <td>{item.days}</td>
-                        <td>{item.quantity}</td>
-                        <td>{formatCurrency(item.daily_rate)}</td>
-                        <td>{formatCurrency(item.total_price)}</td>
+                        <td>{item.equipment_name || item.description || 'Neuvedeno'}</td>
+                        <td>{item.inventory_number || '-'}</td>
+                        <td>{item.issue_date ? formatDate(item.issue_date) : '-'}</td>
+                        <td>
+                          {item.return_date ? formatDate(item.return_date) : 
+                           item.planned_return_date ? formatDate(item.planned_return_date) : 
+                           billingData?.billing_date ? formatDate(billingData.billing_date) : '-'}
+                        </td>
+                        <td>{item.days || '-'}</td>
+                        <td>{item.quantity || 1}</td>
+                        <td>{formatCurrency(item.daily_rate || item.price_per_day || 0)}</td>
+                        <td>{formatCurrency(item.total_price || 0)}</td>
                       </tr>
                     ))}
+                    {(!billingData?.items || billingData.items.length === 0) && (
+                      <tr>
+                        <td colSpan="9" className="text-center">Žádné položky k fakturaci</td>
+                      </tr>
+                    )}
                   </tbody>
                   <tfoot>
                     <tr>
                       <td colSpan="8" className="text-end"><strong>Celkem k fakturaci:</strong></td>
-                      <td><strong>{formatCurrency(billingData.total_amount)}</strong></td>
+                      <td><strong>{formatCurrency(billingData?.total_amount || 0)}</strong></td>
                     </tr>
                   </tfoot>
                 </Table>
@@ -388,26 +420,28 @@ const BillingData = () => {
               {/* Poznámky */}
               <div className="mb-4">
                 <h5>Poznámky</h5>
-                <p>{billingData.note || billingData.order.notes || 'Bez poznámek'}</p>
+                <p>{billingData?.note || billingData?.order?.notes || 'Bez poznámek'}</p>
               </div>
               
               {/* Informace o fakturačním období */}
               <div className="mb-4">
                 <Row>
                   <Col md={4}>
-                    <p><strong>Datum vystavení:</strong> {formatDate(billingData.billing_date)}</p>
+                    <p><strong>Datum vystavení:</strong> {billingData?.billing_date ? formatDate(billingData.billing_date) : 'Neuvedeno'}</p>
                   </Col>
                   <Col md={4}>
                     <p><strong>Fakturační období:</strong>{' '}
-                      {billingData.billing_period_from && billingData.billing_period_to ? (
+                      {billingData?.billing_period_from && billingData?.billing_period_to ? (
                         `${formatDate(billingData.billing_period_from)} - ${formatDate(billingData.billing_period_to)}`
+                      ) : billingData?.period_from && billingData?.period_to ? (
+                        `${formatDate(billingData.period_from)} - ${formatDate(billingData.period_to)}`
                       ) : (
                         'Neuvedeno'
                       )}
                     </p>
                   </Col>
                   <Col md={4}>
-                    <p><strong>Datum splatnosti:</strong> {formatDate(new Date(new Date(billingData.billing_date).getTime() + 14 * 24 * 60 * 60 * 1000))}</p>
+                    <p><strong>Datum splatnosti:</strong> {billingData?.billing_date ? formatDate(new Date(new Date(billingData.billing_date).getTime() + 14 * 24 * 60 * 60 * 1000)) : 'Neuvedeno'}</p>
                   </Col>
                 </Row>
               </div>
