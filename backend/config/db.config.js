@@ -1,21 +1,27 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// Vytvoření připojení k PostgreSQL databázi
-const pool = process.env.NODE_ENV === 'production'
-  ? new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false  // Vyžadováno pro Heroku Postgres
-      }
-    })
-  : new Pool({
-      host: process.env.DB_HOST,
-      port: process.env.DB_PORT,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
-    });
+// Vytvoření připojení k PostgreSQL databázi s podporou Heroku
+let pool;
+
+if (process.env.DATABASE_URL) {
+  // Heroku Postgres
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false // Vyžadováno pro Heroku Postgres
+    }
+  });
+} else {
+  // Lokální databáze
+  pool = new Pool({
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+  });
+}
 
 // Funkce pro otestování připojení
 const testConnection = async () => {
