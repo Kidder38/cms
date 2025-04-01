@@ -26,11 +26,6 @@ app.use(express.urlencoded({ extended: true }));
 // Statické soubory - cesta pro nahrané soubory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Základní route pro otestování API
-app.get('/', (req, res) => {
-  res.json({ message: 'Vítejte v API pro půjčovnu stavebního vybavení' });
-});
-
 // Importy a použití routes pro jednotlivé entity
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/equipment', require('./routes/equipment.routes'));
@@ -38,6 +33,13 @@ app.use('/api/categories', require('./routes/category.routes'));
 app.use('/api/customers', require('./routes/customer.routes'));
 app.use('/api/orders', require('./routes/order.routes'));
 app.use('/api/import', require('./routes/import.routes'));
+
+// Základní route pro otestování API (pouze pro vývojové prostředí)
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/', (req, res) => {
+    res.json({ message: 'Vítejte v API pro půjčovnu stavebního vybavení' });
+  });
+}
 
 // Konfigurace pro produkci - servírování frontendu
 if (process.env.NODE_ENV === 'production') {
