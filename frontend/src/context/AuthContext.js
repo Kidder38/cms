@@ -81,6 +81,16 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const verifyToken = async () => {
       if (!token) {
+        // DOČASNÉ ŘEŠENÍ: Automatické přihlášení admina
+        console.log('Automatické přihlášení admina pro vývoj/testování');
+        setUser({
+          id: 1,
+          username: 'admin',
+          email: 'admin@pujcovna.cz',
+          first_name: 'Admin',
+          last_name: 'Administrátor',
+          role: 'admin'
+        });
         setLoading(false);
         return;
       }
