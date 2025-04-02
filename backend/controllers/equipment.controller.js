@@ -45,16 +45,72 @@ exports.uploadPhoto = upload.single('photo');
 // Získání všech položek vybavení
 exports.getAllEquipment = async (req, res) => {
   try {
-    const result = await db.query(`
+    // Nejprve provedeme diagnostický dotaz pro kontrolu dat v databázi
+    const diagnosticQuery = await db.query(`
+      SELECT 
+        e.id, 
+        e.name, 
+        e.total_stock,
+        COALESCE(SUM(r.quantity), 0) as total_rented
+      FROM 
+        equipment e
+      LEFT JOIN 
+        rentals r ON e.id = r.equipment_id AND r.status IN ('created', 'issued') AND r.actual_return_date IS NULL
+      GROUP BY 
+        e.id, e.name, e.total_stock
+      ORDER BY 
+        e.name ASC
+    `);
+    
+    console.log("===================== DIAGNOSTIC DATA =====================");
+    diagnosticQuery.rows.forEach(row => {
+      if (row.total_stock > 0 || row.total_rented > 0) {
+        console.log(`ID: ${row.id}, Name: ${row.name}, Total Stock: ${row.total_stock}, Total Rented: ${row.total_rented}`);
+      }
+    });
+    console.log("==========================================================");
+    
+    // Získání vybavení s kategoriemi
+    const equipmentResult = await db.query(`
       SELECT e.*, c.name as category_name 
       FROM equipment e
       LEFT JOIN equipment_categories c ON e.category_id = c.id
       ORDER BY e.name ASC
     `);
     
+    // Přímo použijeme výsledky z diagnostického dotazu, který již obsahuje vypočtené
+    // množství vypůjčených kusů - spolehlivější přístup
+    
+    // Vytvoření mapy vypůjčených množství podle ID vybavení
+    const rentedQuantities = {};
+    diagnosticQuery.rows.forEach(row => {
+      rentedQuantities[row.id] = parseInt(row.total_rented);
+    });
+    
+    // Přidání informací o aktuální dostupnosti do výsledků
+    // Přidáme debug informace pro ověření výpočtu
+    console.log("Vypůjčená množství z diagnostického dotazu:", rentedQuantities);
+    
+    const equipmentWithAvailability = equipmentResult.rows.map(item => {
+      const totalStock = item.total_stock !== null ? parseInt(item.total_stock) : 0;
+      const rentedQuantity = rentedQuantities[item.id] || 0;
+      const availableStock = Math.max(0, totalStock - rentedQuantity);
+      
+      // Debug log pro položky s velkým rozdílem
+      if (totalStock > 0 && rentedQuantity > 0) {
+        console.log(`Vybavení ${item.id} (${item.name}): Celkem=${totalStock}, Vypůjčeno=${rentedQuantity}, Dostupné=${availableStock}`);
+      }
+      
+      return {
+        ...item,
+        rented_quantity: rentedQuantity,
+        available_stock: availableStock
+      };
+    });
+    
     res.status(200).json({
-      count: result.rows.length,
-      equipment: result.rows
+      count: equipmentWithAvailability.length,
+      equipment: equipmentWithAvailability
     });
   } catch (error) {
     console.error('Chyba při načítání vybavení:', error);
@@ -78,8 +134,41 @@ exports.getEquipmentById = async (req, res) => {
       return res.status(404).json({ message: 'Vybavení nenalezeno.' });
     }
     
+    // Spolehlivější dotaz s JOIN pro získání přesných informací o výpůjčkách
+    const diagnosticQuery = await db.query(`
+      SELECT 
+        e.id, 
+        e.total_stock,
+        COALESCE(SUM(r.quantity), 0) as total_rented
+      FROM 
+        equipment e
+      LEFT JOIN 
+        rentals r ON e.id = r.equipment_id AND r.status IN ('created', 'issued') AND r.actual_return_date IS NULL
+      WHERE
+        e.id = $1
+      GROUP BY 
+        e.id, e.total_stock
+    `, [id]);
+    
+    const equipment = result.rows[0];
+    const totalStock = equipment.total_stock !== null ? parseInt(equipment.total_stock) : 0;
+    const rentedQuantity = diagnosticQuery.rows.length > 0 && diagnosticQuery.rows[0].total_rented ? 
+                          parseInt(diagnosticQuery.rows[0].total_rented) : 0;
+    
+    // Debug log
+    console.log(`Detail vybavení ${id} (${equipment.name}): Celkem=${totalStock}, Vypůjčeno=${rentedQuantity}`);
+    
+    const availableStock = Math.max(0, totalStock - rentedQuantity);
+    
+    // Přidání informací o dostupnosti
+    const equipmentWithAvailability = {
+      ...equipment,
+      rented_quantity: rentedQuantity,
+      available_stock: availableStock
+    };
+    
     res.status(200).json({
-      equipment: result.rows[0]
+      equipment: equipmentWithAvailability
     });
   } catch (error) {
     console.error('Chyba při načítání vybavení:', error);

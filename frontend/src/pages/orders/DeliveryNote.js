@@ -5,6 +5,7 @@ import { FaPrint, FaDownload, FaArrowLeft } from 'react-icons/fa';
 import axios from 'axios';
 import { API_URL, formatDate, formatCurrency } from '../../config';
 import { useReactToPrint } from 'react-to-print';
+import { generateDeliveryNotePdf } from '../../util/pdfUtils';
 
 const DeliveryNote = () => {
   const { order_id } = useParams();
@@ -37,6 +38,25 @@ const DeliveryNote = () => {
     content: () => printRef.current,
     documentTitle: `Dodaci-list-${deliveryNote?.order?.order_number || 'zakázky'}`,
   });
+  
+  // Funkce pro stažení PDF
+  const handleDownloadPDF = async () => {
+    try {
+      setLoading(true);
+      
+      // Použijeme novou utilitu pro generování PDF
+      const pdf = await generateDeliveryNotePdf(deliveryNote);
+      
+      // Uložíme PDF
+      pdf.save(`Dodaci-list-${deliveryNote?.order?.order_number || 'zakázky'}.pdf`);
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Chyba při generování PDF:', error);
+      setError(`Nepodařilo se vygenerovat PDF: ${error.message || 'Neznámá chyba'}`);
+      setLoading(false);
+    }
+  };
   
   // Zpět na detail zakázky
   const handleBack = () => {
@@ -85,9 +105,21 @@ const DeliveryNote = () => {
           <Button variant="primary" className="me-2" onClick={handlePrint}>
             <FaPrint className="me-2" /> Tisknout
           </Button>
-          {/* Tlačítko pro stažení PDF by vyžadovalo další knihovnu pro generování PDF */}
-          <Button variant="success">
-            <FaDownload className="me-2" /> Stáhnout PDF
+          <Button 
+            variant="success" 
+            onClick={handleDownloadPDF}
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" className="me-2" />
+                Stahuji...
+              </>
+            ) : (
+              <>
+                <FaDownload className="me-2" /> Stáhnout PDF
+              </>
+            )}
           </Button>
         </div>
       </div>

@@ -113,7 +113,13 @@ exports.generateBatchReturnNote = async (req, res) => {
 // Generování podkladu pro fakturaci
 exports.generateBillingData = async (req, res) => {
   const { order_id } = req.params;
-  const { billing_date, include_returned_only, is_final_billing } = req.body;
+  const { 
+    billing_date, 
+    include_returned_only, 
+    is_final_billing,
+    period_from,   // Nový parametr pro začátek období
+    period_to      // Nový parametr pro konec období
+  } = req.body;
   
   try {
     // Načtení zakázky včetně informací o zákazníkovi
@@ -143,26 +149,53 @@ exports.generateBillingData = async (req, res) => {
       returnedCondition = 'AND (r.status = \'returned\' OR r.actual_return_date IS NOT NULL)';
     }
     
-    // Načtení výpůjček pro zakázku
-    const rentalsResult = await db.query(`
+    // Připravíme dodatečnou podmínku pro filtrování podle zadaného období "od-do"
+    let periodCondition = '';
+    if (period_from && period_to) {
+      // Filtrujeme výpůjčky, které spadají do zadaného období (alespoň částečně)
+      periodCondition = `
+        AND (
+          (r.issue_date <= $2 AND (r.actual_return_date IS NULL OR r.actual_return_date >= $2)) OR
+          (r.issue_date >= $2 AND r.issue_date <= $3) OR
+          (r.issue_date <= $3 AND (r.actual_return_date IS NULL OR r.actual_return_date >= $2))
+        )
+      `;
+    }
+    
+    // Načtení výpůjček pro zakázku s respektováním vybraného období
+    const rentalsQuery = `
       SELECT r.*, e.name as equipment_name, e.inventory_number, 
              e.article_number, e.product_designation
       FROM rentals r
       LEFT JOIN equipment e ON r.equipment_id = e.id
-      WHERE r.order_id = $1 ${returnedCondition}
+      WHERE r.order_id = $1 ${returnedCondition} ${periodCondition}
       ORDER BY r.issue_date ASC
-    `, [order_id]);
+    `;
+    
+    // Parametry pro SQL dotaz
+    const queryParams = [order_id];
+    if (period_from && period_to) {
+      queryParams.push(period_from, period_to);
+    }
+    
+    const rentalsResult = await db.query(rentalsQuery, queryParams);
     
     // Výpočet fakturačních položek pro každou výpůjčku
     const billingItems = [];
     
     // Inicializace proměnných pro období fakturace
-    let periodFrom = null;
-    let periodTo = null;
+    // Pokud máme zadané období, použijeme ho
+    let periodFromObj = period_from ? new Date(period_from) : null;
+    let periodToObj = period_to ? new Date(period_to) : null;
     
     for (const rental of rentalsResult.rows) {
       // Určení počtu dní pro fakturaci
       const issueDate = new Date(rental.issue_date);
+      
+      // Pokud máme omezené období fakturace a datum výpůjčky je dříve,
+      // použijeme začátek období jako počáteční datum pro fakturaci
+      const effectiveIssueDate = periodFromObj && issueDate < periodFromObj ? 
+                              periodFromObj : issueDate;
       
       // Určení data vrácení - buď skutečné datum vrácení, nebo datum fakturace, nebo plánované datum vrácení
       let returnDate = rental.actual_return_date ? new Date(rental.actual_return_date) : billingDateObj;
@@ -175,17 +208,22 @@ exports.generateBillingData = async (req, res) => {
         }
       }
       
-      // Aktualizace rozsahu období fakturace
-      if (periodFrom === null || issueDate < periodFrom) {
-        periodFrom = issueDate;
+      // Pokud máme omezené období fakturace a datum vrácení je později,
+      // použijeme konec období jako koncové datum pro fakturaci
+      const effectiveReturnDate = periodToObj && returnDate > periodToObj ? 
+                               periodToObj : returnDate;
+      
+      // Aktualizace rozsahu období fakturace - jen pokud nemáme zadané manuálně
+      if (!periodFromObj && (periodFromObj === null || effectiveIssueDate < periodFromObj)) {
+        periodFromObj = effectiveIssueDate;
       }
       
-      if (periodTo === null || returnDate > periodTo) {
-        periodTo = returnDate;
+      if (!periodToObj && (periodToObj === null || effectiveReturnDate > periodToObj)) {
+        periodToObj = effectiveReturnDate;
       }
       
-      // Výpočet počtu dní
-      const diffTime = Math.abs(returnDate - issueDate);
+      // Výpočet počtu dní - ohraničeno zadaným obdobím
+      const diffTime = Math.abs(effectiveReturnDate - effectiveIssueDate);
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1; // Minimálně 1 den
       
       // Výpočet ceny
@@ -201,7 +239,9 @@ exports.generateBillingData = async (req, res) => {
         inventory_number: rental.inventory_number,
         product_designation: rental.product_designation,
         issue_date: rental.issue_date,
+        effective_issue_date: effectiveIssueDate.toISOString(),
         return_date: rental.actual_return_date || null,
+        effective_return_date: effectiveReturnDate.toISOString(),
         planned_return_date: rental.planned_return_date,
         days: diffDays,
         quantity: quantity,
@@ -215,8 +255,19 @@ exports.generateBillingData = async (req, res) => {
     const totalAmount = billingItems.reduce((sum, item) => sum + item.total_price, 0);
     
     // Formátování datumů období
-    const periodFromFormatted = periodFrom ? periodFrom.toISOString().split('T')[0] : null;
-    const periodToFormatted = periodTo ? periodTo.toISOString().split('T')[0] : null;
+    const periodFromFormatted = periodFromObj ? periodFromObj.toISOString().split('T')[0] : null;
+    const periodToFormatted = periodToObj ? periodToObj.toISOString().split('T')[0] : null;
+    
+    // Kontrola, zda jsou k dispozici položky k fakturaci
+    if (billingItems.length === 0) {
+      return res.status(400).json({ 
+        message: 'Pro zadané období nejsou k dispozici žádné položky k fakturaci.',
+        requestedPeriod: {
+          from: periodFromFormatted,
+          to: periodToFormatted
+        }
+      });
+    }
     
     // Kontrola, zda už neexistuje fakturační podklad pro dané období
     if (periodFromFormatted && periodToFormatted) {

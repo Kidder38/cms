@@ -5,6 +5,7 @@ import { FaPrint, FaDownload, FaArrowLeft } from 'react-icons/fa';
 import axios from 'axios';
 import { API_URL, formatDate, formatCurrency } from '../../config';
 import { useReactToPrint } from 'react-to-print';
+import { generateBatchReturnNotePdf } from '../../util/pdfUtils';
 
 const BatchReturnNote = () => {
   const { batch_id } = useParams();
@@ -37,6 +38,25 @@ const BatchReturnNote = () => {
     content: () => printRef.current,
     documentTitle: `Dodaci-list-vratky-${returnNote?.return_note_number || 'zakazky'}`,
   });
+  
+  // Funkce pro generování a stažení PDF
+  const handleDownloadPdf = async () => {
+    try {
+      setLoading(true);
+      
+      // Použijeme upravenou utilitu pro generování PDF
+      const pdf = await generateBatchReturnNotePdf(returnNote);
+      
+      // Uložení PDF
+      pdf.save(`Dodaci-list-vratky-${returnNote?.return_note_number || 'zakazky'}.pdf`);
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Chyba při generování PDF:', error);
+      setError(`Nepodařilo se vygenerovat PDF: ${error.message || 'Neznámá chyba'}`);
+      setLoading(false);
+    }
+  };
   
   // Zpět na detail zakázky
   const handleBack = () => {
@@ -90,7 +110,7 @@ const BatchReturnNote = () => {
           <Button variant="primary" className="me-2" onClick={handlePrint}>
             <FaPrint className="me-2" /> Tisknout
           </Button>
-          <Button variant="success">
+          <Button variant="success" onClick={handleDownloadPdf}>
             <FaDownload className="me-2" /> Stáhnout PDF
           </Button>
         </div>

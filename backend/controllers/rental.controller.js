@@ -62,15 +62,55 @@ exports.addRental = async (req, res) => {
       });
     }
     
+    // Přesnější dotaz s JOIN pro získání přesných dat o výpůjčkách
+    const diagnosticQuery = await db.query(`
+      SELECT 
+        e.id, 
+        e.total_stock,
+        COALESCE(SUM(r.quantity), 0) as total_rented
+      FROM 
+        equipment e
+      LEFT JOIN 
+        rentals r ON e.id = r.equipment_id AND r.status IN ('created', 'issued') AND r.actual_return_date IS NULL
+      WHERE
+        e.id = $1
+      GROUP BY 
+        e.id, e.total_stock
+    `, [equipment_id]);
+    
+    // Celkový počet již vypůjčených kusů
+    const rentedQuantity = diagnosticQuery.rows.length > 0 && diagnosticQuery.rows[0].total_rented ? 
+                          parseInt(diagnosticQuery.rows[0].total_rented) : 0;
+    
+    // Debug log
+    console.log(`Kontrola dostupnosti vybavení ${equipment_id}: Vypůjčeno=${rentedQuantity}, Požadováno=${quantity}`);
+    
     // Kontrola dostatečného množství kusů na skladě
     if (equipmentData.total_stock !== null && equipmentData.total_stock !== undefined) {
-      const availableStock = parseInt(equipmentData.total_stock);
-      if (availableStock < quantity) {
+      // Celkový počet
+      const totalStock = parseInt(equipmentData.total_stock);
+      
+      // Skutečně dostupný počet kusů (celkový - již vypůjčené)
+      const actualAvailableStock = totalStock - rentedQuantity;
+      
+      if (actualAvailableStock < quantity) {
         return res.status(400).json({ 
-          message: `Nedostatek kusů na skladě. Požadováno: ${quantity}, dostupno: ${availableStock}.`, 
-          availableStock
+          message: `Nedostatek kusů na skladě. Požadováno: ${quantity}, dostupno: ${actualAvailableStock}, 
+                    celkový počet: ${totalStock}, již vypůjčeno: ${rentedQuantity}.`,
+          availableStock: actualAvailableStock,
+          totalStock,
+          rentedQuantity
         });
       }
+    } else {
+      // Pokud není total_stock definováno, nastavíme jej na 0
+      await db.query('UPDATE equipment SET total_stock = 0 WHERE id = $1', [equipment_id]);
+      return res.status(400).json({ 
+        message: `Nedostatek kusů na skladě. Požadováno: ${quantity}, dostupno: 0.`,
+        availableStock: 0,
+        totalStock: 0,
+        rentedQuantity
+      });
     }
     
     // Nastavení defaultních hodnot
@@ -174,56 +214,59 @@ exports.updateRental = async (req, res) => {
     const newStatus = status || originalStatus;
     const newQuantity = quantity ? parseInt(quantity) : originalQuantity;
     
-    // Kontrola dostupnosti kusů, pokud se zvyšuje množství
-    if (newQuantity > originalQuantity) {
-      // Zjistíme aktuální stav vybavení
-      const equipmentCheck = await db.query('SELECT * FROM equipment WHERE id = $1', [originalRental.equipment_id]);
+    // Zjistíme aktuální stav vybavení
+    const equipmentCheck = await db.query('SELECT * FROM equipment WHERE id = $1', [originalRental.equipment_id]);
+    
+    if (equipmentCheck.rows.length > 0) {
+      const equipment = equipmentCheck.rows[0];
+      const availableStock = parseInt(equipment.total_stock) || 0;
       
-      if (equipmentCheck.rows.length > 0) {
-        const equipment = equipmentCheck.rows[0];
-        const availableStock = parseInt(equipment.total_stock) || 0;
+      // Kontrola, zda je dostatek kusů na zvýšení množství (pouze pokud se zvyšuje)
+      if (newQuantity > originalQuantity) {
+        // Dodatečné kusy, které potřebujeme  
+        const additionalQuantityNeeded = newQuantity - originalQuantity;
         
-        // Kontrola, zda je dostatek kusů na zvýšení množství
-        if (availableStock < (newQuantity - originalQuantity)) {
+        if (availableStock < additionalQuantityNeeded) {
           return res.status(400).json({ 
-            message: `Nedostatek kusů na skladě pro zvýšení množství. Požadováno: ${newQuantity - originalQuantity}, dostupno: ${availableStock}.`,
+            message: `Nedostatek kusů na skladě pro zvýšení množství. Požadováno: ${additionalQuantityNeeded}, dostupno: ${availableStock}.`,
             availableStock
           });
         }
+      }
+      
+      // Aktualizace skladu, pokud se mění množství nebo stav
+      if (newQuantity !== originalQuantity || newStatus !== originalStatus) {
+        let stockChange = 0;
         
-        // Aktualizace skladu, pokud se mění množství nebo stav
-        if (newQuantity !== originalQuantity || newStatus !== originalStatus) {
-          let stockChange = 0;
+        // Výpočet změny skladu
+        if (originalStatus === 'issued' && newStatus === 'issued') {
+          // Pokud zůstává status issued, upravíme jen rozdíl v množství
+          // Pozitivní číslo = vracíme do skladu, negativní = další odebíráme ze skladu
+          stockChange = originalQuantity - newQuantity;
+        } else if (originalStatus !== 'issued' && newStatus === 'issued') {
+          // Pokud se mění na issued, odečteme celé nové množství
+          stockChange = -newQuantity;
+        } else if (originalStatus === 'issued' && newStatus !== 'issued') {
+          // Pokud se mění z issued, přičteme celé původní množství
+          stockChange = originalQuantity;
+        }
+        
+        // Aktualizace skladu
+        if (stockChange !== 0) {
+          const newStock = Math.max(0, availableStock + stockChange);
           
-          // Výpočet změny skladu
-          if (originalStatus === 'issued' && newStatus === 'issued') {
-            // Pokud zůstává status issued, upravíme jen rozdíl v množství
-            stockChange = originalQuantity - newQuantity;
-          } else if (originalStatus !== 'issued' && newStatus === 'issued') {
-            // Pokud se mění na issued, odečteme celé nové množství
-            stockChange = -newQuantity;
-          } else if (originalStatus === 'issued' && newStatus !== 'issued') {
-            // Pokud se mění z issued, přičteme celé původní množství
-            stockChange = originalQuantity;
-          }
+          await db.query(
+            'UPDATE equipment SET total_stock = $1 WHERE id = $2',
+            [newStock, originalRental.equipment_id]
+          );
           
-          // Aktualizace skladu
-          if (stockChange !== 0) {
-            const newStock = Math.max(0, availableStock + stockChange);
-            
-            await db.query(
-              'UPDATE equipment SET total_stock = $1 WHERE id = $2',
-              [newStock, originalRental.equipment_id]
-            );
-            
-            // Aktualizace stavu vybavení podle množství na skladě
-            const equipmentStatus = newStock > 0 ? 'available' : 'borrowed';
-            
-            await db.query(
-              'UPDATE equipment SET status = $1 WHERE id = $2',
-              [equipmentStatus, originalRental.equipment_id]
-            );
-          }
+          // Aktualizace stavu vybavení podle množství na skladě
+          const equipmentStatus = newStock > 0 ? 'available' : 'borrowed';
+          
+          await db.query(
+            'UPDATE equipment SET status = $1 WHERE id = $2',
+            [equipmentStatus, originalRental.equipment_id]
+          );
         }
       }
     }

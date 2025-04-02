@@ -4,8 +4,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { FaPrint, FaDownload, FaArrowLeft, FaCalculator } from 'react-icons/fa';
 import axios from 'axios';
 import { API_URL, formatDate, formatCurrency, ORDER_STATUS } from '../../config';
-import { useAuth } from '../../context/AuthContext';
 import { useReactToPrint } from 'react-to-print';
+import { generateBillingPdf } from '../../util/pdfUtils';
 
 const BillingData = () => {
   const { order_id, billing_id } = useParams();
@@ -21,7 +21,10 @@ const BillingData = () => {
   const [billingOptions, setBillingOptions] = useState({
     billing_date: new Date().toISOString().split('T')[0],
     include_returned_only: false,
-    is_final_billing: false
+    is_final_billing: false,
+    period_from: '',  // Nový parametr pro začátek období
+    period_to: '',    // Nový parametr pro konec období
+    use_custom_period: false // Přepínač pro volbu mezi automatickým a manuálním obdobím
   });
   
   // Načtení základních informací o zakázce
@@ -73,7 +76,36 @@ const BillingData = () => {
       setLoading(true);
       setError(null);
       
-      const response = await axios.post(`${API_URL}/orders/${order_id}/billing-data`, billingOptions);
+      // Validace formuláře - pokud používáme vlastní období, musí být obě data vyplněna
+      if (billingOptions.use_custom_period) {
+        if (!billingOptions.period_from || !billingOptions.period_to) {
+          setError('Pokud používáte vlastní období, musíte vyplnit obě data (od-do).');
+          setLoading(false);
+          return;
+        }
+        
+        // Kontrola, že období od je před obdobím do
+        const fromDate = new Date(billingOptions.period_from);
+        const toDate = new Date(billingOptions.period_to);
+        if (fromDate > toDate) {
+          setError('Datum "období od" musí být před datem "období do".');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Připravíme parametry pro API - posíláme jen období, pokud je aktivní vlastní období
+      const requestOptions = {
+        ...billingOptions,
+        // Pokud nepoužíváme vlastní období, vymažeme tyto parametry
+        period_from: billingOptions.use_custom_period ? billingOptions.period_from : undefined,
+        period_to: billingOptions.use_custom_period ? billingOptions.period_to : undefined
+      };
+      
+      // Odebrat "use_custom_period" - toto backend neočekává
+      delete requestOptions.use_custom_period;
+      
+      const response = await axios.post(`${API_URL}/orders/${order_id}/billing-data`, requestOptions);
       
       // Zkontrolujeme, že billingData existuje a má očekávanou strukturu
       if (response.data && response.data.billingData) {
@@ -119,7 +151,18 @@ const BillingData = () => {
               <li><strong>Období:</strong> {formatDate(existingBilling.billing_period_from)} - {formatDate(existingBilling.billing_period_to)}</li>
             </ul>
             <p>Požadované období ({formatDate(reqPeriod.from)} - {formatDate(reqPeriod.to)}) se překrývá s výše uvedeným obdobím.</p>
-            <p>Zvolte prosím jiné datum fakturace nebo upravte dostupné výpůjčky.</p>
+            <p>Zvolte prosím jiné období pro fakturaci.</p>
+          </div>
+        );
+      } else if (error.response?.status === 400 && error.response?.data?.message.includes('nejsou k dispozici žádné položky')) {
+        // Speciální zpracování chyby o nedostupných položkách pro fakturaci
+        const reqPeriod = error.response.data.requestedPeriod;
+        
+        setError(
+          <div>
+            <p>Pro zadané období nejsou k dispozici žádné položky k fakturaci.</p>
+            <p>Období: {formatDate(reqPeriod.from)} - {formatDate(reqPeriod.to)}</p>
+            <p>Zkuste prosím zvolit jiné období nebo ověřte, že v tomto období existují výpůjčky.</p>
           </div>
         );
       } else {
@@ -135,6 +178,30 @@ const BillingData = () => {
     content: () => printRef.current,
     documentTitle: `Fakturační-podklad-${billingData?.invoice_number || 'zakázky'}`,
   });
+  
+  // Funkce pro stažení PDF
+  const handleDownloadPDF = async () => {
+    if (!billingData) {
+      setError('Pro generování PDF je potřeba nejdříve vygenerovat fakturační podklad.');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      // Použijeme novou utilitu pro generování PDF
+      const pdf = await generateBillingPdf(billingData);
+      
+      // Uložíme PDF
+      pdf.save(`Fakturacni-podklad-${billingData?.invoice_number || 'nezname'}.pdf`);
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Chyba při generování PDF:', error);
+      setError(`Nepodařilo se vygenerovat PDF: ${error.message || 'Neznámá chyba'}`);
+      setLoading(false);
+    }
+  };
   
   // Zpět na detail zakázky
   const handleBack = () => {
@@ -208,11 +275,54 @@ const BillingData = () => {
                       Konec měsíce
                     </Button>
                   </div>
-                  <Form.Text className="text-muted">
-                    Fakturační období (od-do) bude automaticky určeno na základě dat výpůjček.
-                    Systém zabrání vytvoření duplicitního podkladu pro již fakturované období.
-                  </Form.Text>
                 </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Check
+                    type="checkbox"
+                    id="use-custom-period"
+                    name="use_custom_period"
+                    label="Nastavit vlastní fakturační období"
+                    checked={billingOptions.use_custom_period}
+                    onChange={handleOptionChange}
+                  />
+                </Form.Group>
+                
+                {billingOptions.use_custom_period && (
+                  <Row className="mb-3">
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label>Období od</Form.Label>
+                        <Form.Control
+                          type="date"
+                          name="period_from"
+                          value={billingOptions.period_from}
+                          onChange={handleOptionChange}
+                          required={billingOptions.use_custom_period}
+                        />
+                      </Form.Group>
+                    </Col>
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label>Období do</Form.Label>
+                        <Form.Control
+                          type="date"
+                          name="period_to"
+                          value={billingOptions.period_to}
+                          onChange={handleOptionChange}
+                          required={billingOptions.use_custom_period}
+                        />
+                      </Form.Group>
+                    </Col>
+                  </Row>
+                )}
+
+                <Form.Text className="text-muted mb-3 d-block">
+                  {billingOptions.use_custom_period 
+                    ? "Fakturace bude ohraničena zadaným obdobím."
+                    : "Fakturační období (od-do) bude automaticky určeno na základě dat výpůjček."}
+                  Systém zabrání vytvoření duplicitního podkladu pro již fakturované období.
+                </Form.Text>
               </Col>
               <Col md={6}>
                 <Alert variant="info" className="mb-3">
@@ -220,6 +330,16 @@ const BillingData = () => {
                   fakturační podklad. Pokud se budou období překrývat, vytvoření nového podkladu bude zamítnuto,
                   aby nedošlo k dvojí fakturaci stejných položek.
                 </Alert>
+                
+                {billingOptions.use_custom_period && (
+                  <Alert variant="warning" className="mb-3">
+                    <strong>Vlastní období:</strong> Zvolili jste vlastní fakturační období
+                    {billingOptions.period_from && billingOptions.period_to && (
+                      <> od <strong>{formatDate(billingOptions.period_from)}</strong> do <strong>{formatDate(billingOptions.period_to)}</strong></>
+                    )}.
+                    Budou zahrnuty pouze výpůjčky, které spadají alespoň částečně do tohoto období.
+                  </Alert>
+                )}
               </Col>
             </Row>
             
@@ -294,8 +414,21 @@ const BillingData = () => {
               <Button variant="primary" className="me-2" onClick={handlePrint}>
                 <FaPrint className="me-2" /> Tisknout
               </Button>
-              <Button variant="success">
-                <FaDownload className="me-2" /> Stáhnout PDF
+              <Button 
+                variant="success" 
+                onClick={handleDownloadPDF}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" className="me-2" />
+                    Stahuji...
+                  </>
+                ) : (
+                  <>
+                    <FaDownload className="me-2" /> Stáhnout PDF
+                  </>
+                )}
               </Button>
             </div>
           </div>

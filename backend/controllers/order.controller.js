@@ -356,12 +356,30 @@ exports.addRental = async (req, res) => {
       status
     ]);
     
-    // Aktualizace stavu vybavení na 'borrowed' pokud je výpůjčka 'issued'
+    // Aktualizace stavu vybavení a snížení počtu dostupných kusů, pokud je výpůjčka 'issued'
     if (status === 'issued') {
-      await db.query(
-        'UPDATE equipment SET status = $1 WHERE id = $2',
-        ['borrowed', equipment_id]
-      );
+      // Nejprve získáme aktuální data o vybavení včetně počtu kusů
+      const equipmentData = equipmentCheck.rows[0];
+      let currentStock = equipmentData.total_stock;
+      
+      // Pokud je celkový počet definován, snížíme ho o 1 (výchozí množství)
+      if (currentStock !== null && currentStock !== undefined) {
+        currentStock = Math.max(0, parseInt(currentStock) - 1);
+        
+        // Aktualizujeme počet kusů na skladě
+        await db.query(
+          'UPDATE equipment SET total_stock = $1 WHERE id = $2',
+          [currentStock, equipment_id]
+        );
+      }
+      
+      // Změníme stav vybavení na 'borrowed', pokud je všechno vypůjčeno
+      if (currentStock === 0) {
+        await db.query(
+          'UPDATE equipment SET status = $1 WHERE id = $2',
+          ['borrowed', equipment_id]
+        );
+      }
     }
     
     res.status(201).json({

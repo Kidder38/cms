@@ -82,10 +82,10 @@ const AddRentalForm = ({ initialOrderId, onSuccess }) => {
         const orderResponse = await axios.get(`${API_URL}/orders/${numericOrderId}`);
         setOrder(orderResponse.data.order);
         
-        // Načtení dostupného vybavení
+        // Načtení dostupného vybavení - nyní už API vrací i available_stock
         const equipmentResponse = await axios.get(`${API_URL}/equipment`);
         const availableEquipment = equipmentResponse.data.equipment.filter(
-          item => item.status === 'available' && (item.total_stock > 0)
+          item => item.status === 'available' && (item.available_stock > 0)
         );
         setEquipment(availableEquipment);
         
@@ -183,19 +183,30 @@ const AddRentalForm = ({ initialOrderId, onSuccess }) => {
       // Zajistíme, že množství je vždy alespoň 1
       const quantity = Math.max(1, parseInt(value) || 1);
       
-      // Kontrola dostupnosti - omezíme množství podle skladových zásob
+      // Kontrola dostupnosti - omezíme množství podle dostupných kusů
       if (newItems[index].equipment_id) {
         const selectedEquipment = equipment.find(eq => eq.id.toString() === newItems[index].equipment_id);
-        if (selectedEquipment && selectedEquipment.total_stock) {
-          const maxQuantity = parseInt(selectedEquipment.total_stock);
+        if (selectedEquipment && selectedEquipment.available_stock !== null && selectedEquipment.available_stock !== undefined) {
+          const maxQuantity = parseInt(selectedEquipment.available_stock);
+          
+          // Pokud je zadané množství větší než dostupné množství, ukážeme upozornění
+          if (quantity > maxQuantity) {
+            setError(`Položka #${index+1}: Sníženo na dostupné množství (${maxQuantity} ks).`);
+            setTimeout(() => setError(null), 3000); // Zrušíme upozornění po 3 sekundách
+          }
+          
           newItems[index] = {
             ...newItems[index],
             [field]: Math.min(quantity, maxQuantity) // Omezíme množství na maximum dostupných kusů
           };
         } else {
+          // Pokud není available_stock definováno, omezíme množství na 0
+          setError(`Položka #${index+1}: Toto vybavení není dostupné.`);
+          setTimeout(() => setError(null), 3000);
+          
           newItems[index] = {
             ...newItems[index],
-            [field]: quantity
+            [field]: 0
           };
         }
       } else {
@@ -225,8 +236,10 @@ const AddRentalForm = ({ initialOrderId, onSuccess }) => {
     const selectedEquipment = equipment.find(eq => eq.id.toString() === equipmentId);
     if (!selectedEquipment) return false;
     
-    // Kontrola, zda je dostatek kusů
-    if (selectedEquipment.total_stock && parseInt(selectedEquipment.total_stock) >= quantity) {
+    // Kontrola, zda je dostatek kusů - použijeme available_stock
+    if (selectedEquipment.available_stock !== null && 
+        selectedEquipment.available_stock !== undefined && 
+        parseInt(selectedEquipment.available_stock) >= quantity) {
       return true;
     }
     
@@ -271,6 +284,16 @@ const AddRentalForm = ({ initialOrderId, onSuccess }) => {
       // Kontrola dostupnosti
       if (!checkAvailability(item.equipment_id, item.quantity)) {
         setError(`Položka #${i+1}: Není dostatek kusů na skladě.`);
+        return false;
+      }
+      
+      // Kontrola, zda máme zadané nenulové množství a vybavení je dostupné
+      const selectedEquipment = equipment.find(eq => eq.id.toString() === item.equipment_id);
+      if (selectedEquipment && 
+          (selectedEquipment.available_stock === null || 
+           selectedEquipment.available_stock === undefined || 
+           parseInt(selectedEquipment.available_stock) === 0)) {
+        setError(`Položka #${i+1}: Vybavení "${selectedEquipment.name}" není dostupné.`);
         return false;
       }
     }
@@ -350,7 +373,25 @@ const AddRentalForm = ({ initialOrderId, onSuccess }) => {
     const selectedEquipment = equipment.find(eq => eq.id.toString() === equipmentId);
     if (!selectedEquipment) return '';
     
-    return `K dispozici: ${selectedEquipment.total_stock || 0} ks`;
+    const availableStock = selectedEquipment.available_stock !== null && 
+                           selectedEquipment.available_stock !== undefined ? 
+                           selectedEquipment.available_stock : 0;
+    
+    const totalStock = selectedEquipment.total_stock !== null && 
+                       selectedEquipment.total_stock !== undefined ? 
+                       selectedEquipment.total_stock : 0;
+    
+    const rentedQuantity = selectedEquipment.rented_quantity || 0;
+    
+    let statusColor = 'text-success';
+    if (availableStock === 0) {
+      statusColor = 'text-danger';
+    } else if (availableStock < 5) {
+      statusColor = 'text-warning';
+    }
+    
+    return `<span class="${statusColor}">K dispozici: ${availableStock} ks</span> 
+            <span class="text-muted">(Celkem: ${totalStock} ks, Vypůjčeno: ${rentedQuantity} ks)</span>`;
   };
   
   // Vypočítání subtotal pro konkrétní položku - dynamicky bez ukládání do stavu
@@ -537,11 +578,11 @@ const AddRentalForm = ({ initialOrderId, onSuccess }) => {
                           <option value="">Vyberte vybavení</option>
                           {equipment.map(eq => (
                             <option key={eq.id} value={eq.id}>
-                              {eq.name} - {eq.inventory_number} ({formatCurrency(eq.daily_rate)}/den)
+                              {eq.name} - {eq.inventory_number} ({formatCurrency(eq.daily_rate)}/den) - Dostupné: {eq.available_stock || 0} ks
                             </option>
                           ))}
                         </Form.Select>
-                        <small className="text-muted">{getAvailabilityInfo(item.equipment_id)}</small>
+                        <small dangerouslySetInnerHTML={{ __html: getAvailabilityInfo(item.equipment_id) }}></small>
                       </td>
                       <td>
                         <Form.Control
