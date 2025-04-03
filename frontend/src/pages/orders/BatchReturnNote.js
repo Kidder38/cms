@@ -5,7 +5,8 @@ import { FaPrint, FaDownload, FaArrowLeft } from 'react-icons/fa';
 import axios from 'axios';
 import { API_URL, formatDate, formatCurrency } from '../../config';
 import { useReactToPrint } from 'react-to-print';
-import { generateBatchReturnNotePdf } from '../../util/pdfUtils';
+// Změna implementace PDF generátoru na alternativní s lepší podporou češtiny
+import { generateBatchReturnNotePdf } from '../../util/pdfUtilsAlternative';
 
 const BatchReturnNote = () => {
   const { batch_id } = useParams();
@@ -44,11 +45,8 @@ const BatchReturnNote = () => {
     try {
       setLoading(true);
       
-      // Použijeme upravenou utilitu pro generování PDF
-      const pdf = await generateBatchReturnNotePdf(returnNote);
-      
-      // Uložení PDF
-      pdf.save(`Dodaci-list-vratky-${returnNote?.return_note_number || 'zakazky'}.pdf`);
+      // Použijeme novou alternativní implementaci, která rovnou stahuje PDF
+      await generateBatchReturnNotePdf(returnNote);
       
       setLoading(false);
     } catch (error) {
@@ -110,8 +108,21 @@ const BatchReturnNote = () => {
           <Button variant="primary" className="me-2" onClick={handlePrint}>
             <FaPrint className="me-2" /> Tisknout
           </Button>
-          <Button variant="success" onClick={handleDownloadPdf}>
-            <FaDownload className="me-2" /> Stáhnout PDF
+          <Button 
+            variant="success" 
+            onClick={handleDownloadPdf}
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" className="me-2" />
+                Stahuji...
+              </>
+            ) : (
+              <>
+                <FaDownload className="me-2" /> Stáhnout PDF
+              </>
+            )}
           </Button>
         </div>
       </div>

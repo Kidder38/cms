@@ -5,7 +5,7 @@ import { FaPrint, FaDownload, FaArrowLeft, FaCalculator } from 'react-icons/fa';
 import axios from 'axios';
 import { API_URL, formatDate, formatCurrency, ORDER_STATUS } from '../../config';
 import { useReactToPrint } from 'react-to-print';
-import { generateBillingPdf } from '../../util/pdfUtils';
+import { generateBillingPdf } from '../../util/pdfUtilsAlternative';
 
 const BillingData = () => {
   const { order_id, billing_id } = useParams();
@@ -189,11 +189,8 @@ const BillingData = () => {
     try {
       setLoading(true);
       
-      // Použijeme novou utilitu pro generování PDF
-      const pdf = await generateBillingPdf(billingData);
-      
-      // Uložíme PDF
-      pdf.save(`Fakturacni-podklad-${billingData?.invoice_number || 'nezname'}.pdf`);
+      // Použijeme alternativní utilitu, která rovnou stahuje PDF
+      await generateBillingPdf(billingData);
       
       setLoading(false);
     } catch (error) {
@@ -438,11 +435,11 @@ const BillingData = () => {
             <div className="billing-data-content">
               {/* Záhlaví fakturačního podkladu */}
               <div className="text-center mb-4">
-                <h1>PODKLAD PRO FAKTURACI</h1>
+                <h1>FAKTURAČNÍ PODKLAD</h1>
                 <h4>č. {billingData?.invoice_number || 'Neznámé'}</h4>
                 <p>Datum vystavení: {billingData?.billing_date ? formatDate(billingData.billing_date) : 'Neuvedeno'}</p>
-                {billingOptions.is_final_billing && (
-                  <div className="badge bg-warning text-dark p-2 my-2">KONEČNÁ FAKTURACE</div>
+                {(billingOptions.is_final_billing || billingData?.is_final_billing) && (
+                  <div className="badge bg-danger text-white p-2 my-2">KONEČNÁ FAKTURACE</div>
                 )}
               </div>
               
@@ -502,17 +499,16 @@ const BillingData = () => {
               
               {/* Seznam fakturačních položek */}
               <div className="mb-4">
-                <h5>Fakturační položky</h5>
-                <Table bordered>
-                  <thead>
+                <h5>Seznam položek</h5>
+                <Table bordered className="mt-3">
+                  <thead className="bg-light">
                     <tr>
-                      <th>Pořadí</th>
                       <th>Název</th>
                       <th>Inv. č.</th>
                       <th>Od</th>
                       <th>Do</th>
-                      <th>Počet dní</th>
-                      <th>Počet ks</th>
+                      <th>Dny</th>
+                      <th>Ks</th>
                       <th>Sazba/den</th>
                       <th>Celkem</th>
                     </tr>
@@ -520,7 +516,6 @@ const BillingData = () => {
                   <tbody>
                     {billingData?.items?.map((item, index) => (
                       <tr key={index}>
-                        <td>{index + 1}</td>
                         <td>{item.equipment_name || item.description || 'Neuvedeno'}</td>
                         <td>{item.inventory_number || '-'}</td>
                         <td>{item.issue_date ? formatDate(item.issue_date) : '-'}</td>
@@ -529,22 +524,22 @@ const BillingData = () => {
                            item.planned_return_date ? formatDate(item.planned_return_date) : 
                            billingData?.billing_date ? formatDate(billingData.billing_date) : '-'}
                         </td>
-                        <td>{item.days || '-'}</td>
-                        <td>{item.quantity || 1}</td>
-                        <td>{formatCurrency(item.daily_rate || item.price_per_day || 0)}</td>
-                        <td>{formatCurrency(item.total_price || 0)}</td>
+                        <td className="text-center">{item.days || '-'}</td>
+                        <td className="text-center">{item.quantity || 1}</td>
+                        <td className="text-end">{formatCurrency(item.daily_rate || item.price_per_day || 0)}</td>
+                        <td className="text-end">{formatCurrency(item.total_price || 0)}</td>
                       </tr>
                     ))}
                     {(!billingData?.items || billingData.items.length === 0) && (
                       <tr>
-                        <td colSpan="9" className="text-center">Žádné položky k fakturaci</td>
+                        <td colSpan="8" className="text-center">Žádné položky k fakturaci</td>
                       </tr>
                     )}
                   </tbody>
                   <tfoot>
                     <tr>
-                      <td colSpan="8" className="text-end"><strong>Celkem k fakturaci:</strong></td>
-                      <td><strong>{formatCurrency(billingData?.total_amount || 0)}</strong></td>
+                      <td colSpan="7" className="text-end"><strong>Celkem k fakturaci:</strong></td>
+                      <td className="text-end"><strong>{formatCurrency(billingData?.total_amount || 0)}</strong></td>
                     </tr>
                   </tfoot>
                 </Table>

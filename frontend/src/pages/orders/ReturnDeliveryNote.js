@@ -5,6 +5,7 @@ import { FaPrint, FaDownload, FaArrowLeft } from 'react-icons/fa';
 import axios from 'axios';
 import { API_URL, formatDate, formatCurrency } from '../../config';
 import { useReactToPrint } from 'react-to-print';
+import { generateReturnDeliveryNotePdf } from '../../util/pdfUtilsAlternative';
 
 const ReturnDeliveryNote = () => {
   const { return_id } = useParams();
@@ -37,6 +38,22 @@ const ReturnDeliveryNote = () => {
     content: () => printRef.current,
     documentTitle: `Dodaci-list-vratky-${deliveryNote?.return?.id || ''}`,
   });
+  
+  // Funkce pro stažení PDF
+  const handleDownloadPdf = async () => {
+    try {
+      setLoading(true);
+      
+      // Použijeme novou implementaci, která vytvoří PDF a spustí download
+      await generateReturnDeliveryNotePdf(deliveryNote);
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Chyba při generování PDF:', error);
+      setError(`Nepodařilo se vygenerovat PDF: ${error.message || 'Neznámá chyba'}`);
+      setLoading(false);
+    }
+  };
   
   // Zpět na detail zakázky
   const handleBack = () => {
@@ -91,8 +108,21 @@ const ReturnDeliveryNote = () => {
           <Button variant="primary" className="me-2" onClick={handlePrint}>
             <FaPrint className="me-2" /> Tisknout
           </Button>
-          <Button variant="success">
-            <FaDownload className="me-2" /> Stáhnout PDF
+          <Button 
+            variant="success" 
+            onClick={handleDownloadPdf}
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" className="me-2" />
+                Stahuji...
+              </>
+            ) : (
+              <>
+                <FaDownload className="me-2" /> Stáhnout PDF
+              </>
+            )}
           </Button>
         </div>
       </div>

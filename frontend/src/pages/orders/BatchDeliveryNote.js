@@ -5,7 +5,8 @@ import { FaPrint, FaDownload, FaArrowLeft } from 'react-icons/fa';
 import axios from 'axios';
 import { API_URL, formatDate, formatCurrency } from '../../config';
 import { useReactToPrint } from 'react-to-print';
-import { generateBatchDeliveryNotePdf } from '../../util/pdfUtils';
+// Použití alternativní PDF knihovny s lepší podporou češtiny
+import { generateBatchDeliveryNotePdf } from '../../util/pdfUtilsAlternative';
 
 const BatchDeliveryNote = () => {
   const { batch_id } = useParams();
@@ -39,16 +40,14 @@ const BatchDeliveryNote = () => {
     documentTitle: `Dodaci-list-${deliveryNote?.order_number || 'zakazky'}`,
   });
   
-  // Funkce pro generování a stažení PDF
+  // Funkce pro generování a stažení PDF s využitím pdfMake
   const handleDownloadPdf = async () => {
     try {
       setLoading(true);
       
-      // Použijeme upravenou utilitu pro generování PDF
-      const pdf = await generateBatchDeliveryNotePdf(deliveryNote);
-      
-      // Uložení PDF
-      pdf.save(`Hromadny-dodaci-list-${deliveryNote?.order_number || 'zakazky'}.pdf`);
+      // S novou implementací se přímo generuje a stahuje PDF
+      // Název souboru je již definován v samotné funkci
+      await generateBatchDeliveryNotePdf(deliveryNote);
       
       setLoading(false);
     } catch (error) {

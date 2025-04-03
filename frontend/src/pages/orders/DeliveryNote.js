@@ -5,7 +5,7 @@ import { FaPrint, FaDownload, FaArrowLeft } from 'react-icons/fa';
 import axios from 'axios';
 import { API_URL, formatDate, formatCurrency } from '../../config';
 import { useReactToPrint } from 'react-to-print';
-import { generateDeliveryNotePdf } from '../../util/pdfUtils';
+import { generateDeliveryNotePdf } from '../../util/pdfUtilsAlternative.js';
 
 const DeliveryNote = () => {
   const { order_id } = useParams();
