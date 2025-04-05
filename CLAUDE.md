@@ -33,6 +33,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `/frontend`: Client-side code (components, pages, contexts)
   - `/database`: SQL scripts for database initialization
 
+## API Integration
+- Always use the axios instance from `frontend/src/axios-config.js` (not direct axios imports)
+- All API endpoints must use the `/api` prefix in production environment
+- Example: `/api/customers`, `/api/orders/:id/rentals`, etc.
+- The axios configuration handles different baseURL settings for development vs. production
+
+## Error Handling Best Practices
+- Add null checks with optional chaining (`?.`) before filter/map/reduce operations
+- Provide fallback values (`|| []`) for potentially undefined arrays
+- Example: `const filtered = items?.filter(item => item.active) || []`
+- Use try/catch blocks for all async operations with proper error logging
+
+## Deployment
+- Application is deployed on Heroku at https://pujcovna-stavebnin.herokuapp.com
+- Database is hosted on Heroku PostgreSQL
+- Use `migrate-database.sh` script for database migrations between environments
+
 Always match existing patterns when modifying files and ensure PDF generation utilities in pdfUtils.js follow established conventions.
 
 ## User Management
