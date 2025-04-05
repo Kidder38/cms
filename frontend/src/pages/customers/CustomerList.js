@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Table, Button, Alert, InputGroup, Form } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL } from '../../config';
+import axios from '../../axios-config';
+import { } from '../../config';
 import { useAuth } from '../../context/AuthContext';
 
 const CustomerList = () => {
@@ -15,7 +15,7 @@ const CustomerList = () => {
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
-        const response = await axios.get(`${API_URL}/customers`);
+        const response = await axios.get(`/api/customers`);
         setCustomers(response.data.customers);
         setLoading(false);
       } catch (error) {

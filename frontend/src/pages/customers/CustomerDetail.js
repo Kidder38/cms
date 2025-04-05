@@ -29,8 +29,8 @@ const CustomerDetail = () => {
       try {
         // Načtení dat zákazníka a jeho zakázek paralelně
         const [customerResponse, ordersResponse] = await Promise.all([
-          axios.get(`/customers/${id}`),
-          axios.get(`/customers/${id}/orders`)
+          axios.get(`/api/customers/${id}`),
+          axios.get(`/api/customers/${id}/orders`)
         ]);
         
         setCustomer(customerResponse.data.customer);
@@ -67,7 +67,7 @@ const CustomerDetail = () => {
     }
     
     try {
-      await axios.delete(`/customers/${id}`);
+      await axios.delete(`/api/customers/${id}`);
       alert('Zákazník byl úspěšně smazán.');
       navigate('/customers');
     } catch (error) {

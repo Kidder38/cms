@@ -15,8 +15,8 @@ import {
   Badge
 } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL, formatDate, formatCurrency } from '../../config';
+import axios from '../../axios-config';
+import { formatDate, formatCurrency } from '../../config';
 import { useAuth } from '../../context/AuthContext';
 import { 
   FaFileAlt, 
@@ -65,7 +65,7 @@ const BatchRentalReturnForm = () => {
     const fetchOrdersWithRentals = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${API_URL}/orders`);
+        const response = await axios.get(`/api/orders`);
         // Filtrování zakázek s aktivními výpůjčkami
         const ordersWithRentals = response.data.orders.filter(order => 
           order.status !== 'completed'
@@ -86,7 +86,7 @@ const BatchRentalReturnForm = () => {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await axios.get(`${API_URL}/categories`);
+        const response = await axios.get(`/api/categories`);
         setCategories(response.data.categories || []);
       } catch (error) {
         console.error('Chyba při načítání kategorií:', error);
@@ -110,8 +110,8 @@ const BatchRentalReturnForm = () => {
         
         // Načtení detailu zakázky a výpůjček
         const [orderResponse, rentalsResponse] = await Promise.all([
-          axios.get(`${API_URL}/orders/${selectedOrder}`),
-          axios.get(`${API_URL}/orders/${selectedOrder}/rentals`)
+          axios.get(`/api/orders/${selectedOrder}`),
+          axios.get(`/api/orders/${selectedOrder}/rentals`)
         ]);
         
         setOrderDetails(orderResponse.data.order);
@@ -340,7 +340,7 @@ const BatchRentalReturnForm = () => {
       const returns = [];
       for (const returnItem of batchReturns) {
         const response = await axios.post(
-          `${API_URL}/orders/${selectedOrder}/rentals/${returnItem.rental_id}/return`, 
+          `/api/orders/${selectedOrder}/rentals/${returnItem.rental_id}/return`, 
           returnItem
         );
         returns.push(response.data);

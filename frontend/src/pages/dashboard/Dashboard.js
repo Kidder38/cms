@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, ListGroup, Alert } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL, formatDate, formatCurrency, EQUIPMENT_STATUS } from '../../config';
+import axios from '../../axios-config';
+import { formatDate, formatCurrency, EQUIPMENT_STATUS } from '../../config';
 import { useAuth } from '../../context/AuthContext';
 
 const Dashboard = () => {
@@ -35,8 +35,8 @@ const Dashboard = () => {
     const fetchDashboardData = async () => {
       try {
         // Načtení základních dat pro dashboard (všichni uživatelé)
-        const customersResponse = await axios.get(`${API_URL}/customers`);
-        const ordersResponse = await axios.get(`${API_URL}/orders`);
+        const customersResponse = await axios.get(`/api/customers`);
+        const ordersResponse = await axios.get(`/api/orders`);
         
         // Zpracování dat pro statistiky
         const customersData = customersResponse.data.customers || [];
@@ -60,8 +60,8 @@ const Dashboard = () => {
         // Pokud je uživatel admin, načti i data o vybavení
         if (user?.role === 'admin') {
           try {
-            const equipmentResponse = await axios.get(`${API_URL}/equipment`);
-            const categoriesResponse = await axios.get(`${API_URL}/categories`);
+            const equipmentResponse = await axios.get(`/api/equipment`);
+            const categoriesResponse = await axios.get(`/api/categories`);
             
             const equipmentData = equipmentResponse.data.equipment || [];
             

@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Container, Row, Col, Card, Button, Alert, Table, Spinner } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FaPrint, FaDownload, FaArrowLeft } from 'react-icons/fa';
-import axios from 'axios';
-import { API_URL, formatDate, formatCurrency } from '../../config';
+import axios from '../../axios-config';
+import { formatDate, formatCurrency } from '../../config';
 import { useReactToPrint } from 'react-to-print';
 // Změna implementace PDF generátoru na alternativní s lepší podporou češtiny
 import { generateBatchReturnNotePdf } from '../../util/pdfUtilsAlternative';
@@ -21,7 +21,7 @@ const BatchReturnNote = () => {
   useEffect(() => {
     const fetchReturnNote = async () => {
       try {
-        const response = await axios.get(`${API_URL}/orders/batch-returns/${batch_id}/delivery-note`);
+        const response = await axios.get(`/api/orders/batch-returns/${batch_id}/delivery-note`);
         setReturnNote(response.data.returnNote);
         setLoading(false);
       } catch (error) {

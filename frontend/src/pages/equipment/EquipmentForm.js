@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL } from '../../config';
+import axios from '../../axios-config';
 import { useAuth } from '../../context/AuthContext';
 
 const EquipmentForm = () => {
@@ -47,7 +46,7 @@ const EquipmentForm = () => {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await axios.get(`${API_URL}/categories`);
+        const response = await axios.get(`/api/categories`);
         setCategories(response.data.categories);
       } catch (error) {
         console.error('Chyba při načítání kategorií:', error);
@@ -64,7 +63,7 @@ const EquipmentForm = () => {
       const fetchEquipment = async () => {
         setLoading(true);
         try {
-          const response = await axios.get(`${API_URL}/equipment/${id}`);
+          const response = await axios.get(`/api/equipment/${id}`);
           const equipmentData = response.data.equipment;
 
           setFormData({
@@ -164,13 +163,13 @@ const EquipmentForm = () => {
 
       let response;
       if (isEditing) {
-        response = await axios.put(`${API_URL}/equipment/${id}`, formDataObj, {
+        response = await axios.put(`/api/equipment/${id}`, formDataObj, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
         });
       } else {
-        response = await axios.post(`${API_URL}/equipment`, formDataObj, {
+        response = await axios.post(`/api/equipment`, formDataObj, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
@@ -229,7 +228,7 @@ const EquipmentForm = () => {
                     disabled={loading}
                   >
                     <option value="">Vyberte kategorii</option>
-                    {categories.map(category => (
+                    {categories?.map(category => (
                       <option key={category.id} value={category.id}>
                         {category.name}
                       </option>

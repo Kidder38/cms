@@ -19,9 +19,8 @@ import {
   useParams, 
   useNavigate 
 } from 'react-router-dom';
-import axios from 'axios';
+import axios from '../../axios-config';
 import { 
-  API_URL, 
   formatDate, 
   formatCurrency, 
   ORDER_STATUS, 
@@ -146,10 +145,10 @@ const OrderDetail = () => {
         returnsResponse, 
         billingResponse
       ] = await Promise.all([
-        axios.get(`${API_URL}/orders/${numericId}`),
-        axios.get(`${API_URL}/orders/${numericId}/rentals`),
-        axios.get(`${API_URL}/orders/${numericId}/returns`),
-        axios.get(`${API_URL}/orders/${numericId}/billing-data`)
+        axios.get(`/api/orders/${numericId}`),
+        axios.get(`/api/orders/${numericId}/rentals`),
+        axios.get(`/api/orders/${numericId}/returns`),
+        axios.get(`/api/orders/${numericId}/billing-data`)
       ]);
 
       setOrder(orderResponse.data.order);
@@ -191,7 +190,7 @@ const OrderDetail = () => {
 
     try {
       const numericId = parseInt(id);
-      await axios.delete(`${API_URL}/orders/${numericId}`);
+      await axios.delete(`/api/orders/${numericId}`);
       navigate('/orders');
     } catch (error) {
       console.error('Chyba při mazání zakázky:', error);
@@ -617,7 +616,7 @@ const OrderDetail = () => {
               throw new Error('Neplatné ID zakázky');
             }
             
-            await axios.post(`${API_URL}/orders/${numericId}/rentals/${rentalId}/return`, returnData);
+            await axios.post(`/api/orders/${numericId}/rentals/${rentalId}/return`, returnData);
             fetchOrderDetails();
             setShowReturnModal(false);
             return returnData; // Vraťte returnData pro pozdější použití

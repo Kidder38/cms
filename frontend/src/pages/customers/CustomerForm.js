@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL } from '../../config';
+import axios from '../../axios-config';
 
 const CustomerForm = () => {
   const { id } = useParams();
@@ -31,7 +30,7 @@ const CustomerForm = () => {
       const fetchCustomer = async () => {
         setLoading(true);
         try {
-          const response = await axios.get(`${API_URL}/customers/${id}`);
+          const response = await axios.get(`/api/customers/${id}`);
           const customerData = response.data.customer;
           
           setFormData({
@@ -74,10 +73,10 @@ const CustomerForm = () => {
     try {
       if (isEditing) {
         // Aktualizace existujícího zákazníka
-        await axios.put(`${API_URL}/customers/${id}`, formData);
+        await axios.put(`/api/customers/${id}`, formData);
       } else {
         // Vytvoření nového zákazníka
-        await axios.post(`${API_URL}/customers`, formData);
+        await axios.post(`/api/customers`, formData);
       }
       
       setSaveSuccess(true);

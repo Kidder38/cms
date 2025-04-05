@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL } from '../../config';
+import axios from '../../axios-config';
 
 const CategoryForm = () => {
   const { id } = useParams();
@@ -24,7 +23,7 @@ const CategoryForm = () => {
       const fetchCategory = async () => {
         setLoading(true);
         try {
-          const response = await axios.get(`${API_URL}/categories/${id}`);
+          const response = await axios.get(`/api/categories/${id}`);
           const categoryData = response.data.category;
           
           setFormData({
@@ -57,10 +56,10 @@ const CategoryForm = () => {
     try {
       if (isEditing) {
         // Aktualizace existující kategorie
-        await axios.put(`${API_URL}/categories/${id}`, formData);
+        await axios.put(`/api/categories/${id}`, formData);
       } else {
         // Vytvoření nové kategorie
-        await axios.post(`${API_URL}/categories`, formData);
+        await axios.post(`/api/categories`, formData);
       }
       
       setSaveSuccess(true);

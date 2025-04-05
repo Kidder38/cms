@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Table, Button, Alert, InputGroup, Form } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL, formatCurrency, EQUIPMENT_STATUS } from '../../config';
+import axios from '../../axios-config';
+import { formatCurrency, EQUIPMENT_STATUS } from '../../config';
 import { useAuth } from '../../context/AuthContext';
 import ImportEquipmentModal from '../../components/equipment/ImportEquipmentModal';
 
@@ -17,7 +17,7 @@ const EquipmentList = () => {
   const fetchEquipment = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_URL}/equipment`);
+      const response = await axios.get(`/api/equipment`);
       setEquipment(response.data.equipment);
       setLoading(false);
     } catch (error) {

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Alert, Spinner, Card, Form, InputGroup } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL } from '../../config';
+import axios from '../../axios-config';
 import { useAuth } from '../../context/AuthContext';
 
 const UserList = () => {
@@ -16,7 +15,7 @@ const UserList = () => {
     const fetchUsers = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${API_URL}/api/users`);
+        const response = await axios.get(`/api/users`);
         setUsers(response.data.users || []);
         setError(null);
       } catch (err) {
@@ -63,8 +62,8 @@ const UserList = () => {
     if (!window.confirm('Opravdu chcete smazat tohoto uživatele?')) return;
     
     try {
-      await axios.delete(`${API_URL}/api/users/${id}`);
-      setUsers(users.filter(user => user.id !== id));
+      await axios.delete(`/api/users/${id}`);
+      setUsers(users?.filter(user => user.id !== id) || []);
     } catch (err) {
       console.error('Chyba při mazání uživatele:', err);
       alert('Nepodařilo se smazat uživatele: ' + (err.response?.data?.message || err.message));

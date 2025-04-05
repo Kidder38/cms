@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Table, Button, Alert, InputGroup, Form } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL, formatDate, ORDER_STATUS } from '../../config';
+import axios from '../../axios-config';
+import { formatDate, ORDER_STATUS } from '../../config';
 import { useAuth } from '../../context/AuthContext';
 
 const OrderList = () => {
@@ -16,7 +16,7 @@ const OrderList = () => {
   useEffect(() => {
     const fetchOrders = async () => {
       try {
-        const response = await axios.get(`${API_URL}/orders`);
+        const response = await axios.get(`/api/orders`);
         setOrders(response.data.orders);
         setLoading(false);
       } catch (error) {

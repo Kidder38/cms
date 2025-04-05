@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Table, Button, Alert, InputGroup, Form, Modal } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL } from '../../config';
+import axios from '../../axios-config';
 import { useAuth } from '../../context/AuthContext';
 
 const CategoryList = () => {
@@ -21,7 +20,7 @@ const CategoryList = () => {
   const fetchCategories = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_URL}/categories`);
+      const response = await axios.get(`/api/categories`);
       setCategories(response.data.categories);
       setError(null);
     } catch (error) {
@@ -58,7 +57,7 @@ const CategoryList = () => {
     setDeleteError(null);
     
     try {
-      await axios.delete(`${API_URL}/categories/${categoryToDelete.id}`);
+      await axios.delete(`/api/categories/${categoryToDelete.id}`);
       
       // Aktualizace seznamu kategorií po úspěšném smazání
       setCategories(prevCategories => 
