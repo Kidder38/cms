@@ -91,14 +91,6 @@ const CustomerDetail = () => {
     );
   }
   
-  if (!customer) {
-    return (
-      <Container>
-        <Alert variant="warning">Zákazník nebyl nalezen.</Alert>
-      </Container>
-    );
-  }
-  
   // Filtrování zakázek dle vybraného filtru
   useEffect(() => {
     if (orderFilter === 'all') {
@@ -107,6 +99,14 @@ const CustomerDetail = () => {
       setFilteredOrders(customerOrders.filter(order => order.status === orderFilter));
     }
   }, [orderFilter, customerOrders]);
+  
+  if (!customer) {
+    return (
+      <Container>
+        <Alert variant="warning">Zákazník nebyl nalezen.</Alert>
+      </Container>
+    );
+  }
   
   const categoryInfo = getCustomerCategoryLabel(customer.customer_category);
   
