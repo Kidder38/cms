@@ -16,7 +16,7 @@ const UserList = () => {
     const fetchUsers = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${API_URL}/users`);
+        const response = await axios.get(`${API_URL}/api/users`);
         setUsers(response.data.users || []);
         setError(null);
       } catch (err) {
@@ -63,7 +63,7 @@ const UserList = () => {
     if (!window.confirm('Opravdu chcete smazat tohoto uživatele?')) return;
     
     try {
-      await axios.delete(`${API_URL}/users/${id}`);
+      await axios.delete(`${API_URL}/api/users/${id}`);
       setUsers(users.filter(user => user.id !== id));
     } catch (err) {
       console.error('Chyba při mazání uživatele:', err);

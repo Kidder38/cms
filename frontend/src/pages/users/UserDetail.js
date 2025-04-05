@@ -21,13 +21,13 @@ const UserDetail = () => {
         setLoading(true);
         
         // Načtení detailu uživatele
-        const userResponse = await axios.get(`${API_URL}/users/${id}`);
+        const userResponse = await axios.get(`${API_URL}/api/users/${id}`);
         setUser(userResponse.data.user);
         
         // Načtení zákazníků a zakázek přiřazených uživateli
         const [customersResponse, ordersResponse] = await Promise.all([
-          axios.get(`${API_URL}/users/${id}/customers`),
-          axios.get(`${API_URL}/users/${id}/orders`)
+          axios.get(`${API_URL}/api/users/${id}/customers`),
+          axios.get(`${API_URL}/api/users/${id}/orders`)
         ]);
         
         // Ošetření null hodnot z API
@@ -50,7 +50,7 @@ const UserDetail = () => {
     if (!window.confirm('Opravdu chcete smazat tohoto uživatele?')) return;
     
     try {
-      await axios.delete(`${API_URL}/users/${id}`);
+      await axios.delete(`${API_URL}/api/users/${id}`);
       navigate('/users');
     } catch (err) {
       console.error('Chyba při mazání uživatele:', err);
