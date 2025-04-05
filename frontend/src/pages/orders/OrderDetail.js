@@ -42,6 +42,7 @@ import {
 
 import RentalReturnModal from './RentalReturnModal';
 import AddRentalForm from './AddRentalForm';
+import ImprovedAddRentalForm from './ImprovedAddRentalForm';
 
 const OrderDetail = () => {
   const { id } = useParams();
@@ -243,19 +244,9 @@ const OrderDetail = () => {
   // Renderování detail zakázky
   return (
     <Container>
-      {/* Hlavička sekce */}
-      <Row className="mb-4 align-items-center">
+      {/* Hlavička s navigací */}
+      <Row className="mb-3 align-items-center">
         <Col>
-          <h1>Zakázka č. {order.order_number}</h1>
-          <h4 className="text-muted">{order.name}</h4>
-          <Badge 
-            bg={ORDER_STATUS[order.status].color} 
-            className="fs-6"
-          >
-            {ORDER_STATUS[order.status].label}
-          </Badge>
-        </Col>
-        <Col className="text-end">
           <Button 
             variant="outline-secondary" 
             onClick={() => navigate('/orders')} 
@@ -283,402 +274,334 @@ const OrderDetail = () => {
           )}
         </Col>
       </Row>
+      
+      {/* Základní informace o zakázce - společná pro všechny záložky */}
+      <Card className="mb-4">
+        <Card.Body>
+          <Row>
+            <Col md={7}>
+              <h1 className="mb-2">Zakázka č. {order.order_number}</h1>
+              <h4 className="text-muted mb-3">{order.name}</h4>
+              <Row className="mb-3">
+                <Col md={6}>
+                  <div className="mb-2">
+                    <strong>Zákazník:</strong>{' '}
+                    <Link to={`/customers/${order.customer_id}`}>
+                      {order.customer_name}
+                    </Link>
+                  </div>
+                  <div className="mb-2">
+                    <strong>Datum vytvoření:</strong> {formatDate(order.creation_date)}
+                  </div>
+                  <div>
+                    <strong>Předpokládaný konec:</strong>{' '}
+                    {formatDate(order.estimated_end_date) || 'Neurčeno'}
+                  </div>
+                </Col>
+                <Col md={6}>
+                  <div className="mb-2">
+                    <strong>Celková cena:</strong>{' '}
+                    {formatCurrency(calculateTotalPrice())}
+                  </div>
+                  <div className="mb-2">
+                    <strong>Stav:</strong>{' '}
+                    <Badge 
+                      bg={ORDER_STATUS[order.status].color} 
+                      className="fs-6"
+                    >
+                      {ORDER_STATUS[order.status].label}
+                    </Badge>
+                  </div>
+                  <div className="mb-2">
+                    <strong>Poznámka:</strong>{' '}
+                    <span className="text-muted">{order.notes || 'Žádná poznámka'}</span>
+                  </div>
+                </Col>
+              </Row>
+            </Col>
+            <Col md={5} className="d-flex flex-column justify-content-between">
+              {/* Akční tlačítka včetně výpůjček a vratek */}
+              {user?.role === 'admin' && order.status !== 'completed' && (
+                <div className="mb-2 d-flex flex-wrap gap-2 justify-content-end">
+                  <Button 
+                    variant="primary"
+                    onClick={() => setShowAddRentalModal(true)}
+                  >
+                    <FaPlus className="me-1" /> Přidat výpůjčku
+                  </Button>
+                  <Button 
+                    variant="warning"
+                    as={Link}
+                    to="/orders/batch-return"
+                  >
+                    <FaUndo className="me-1" /> Vratka
+                  </Button>
+                </div>
+              )}
+              
+              {/* Dokumenty */}
+              <div className="d-flex flex-wrap gap-2 justify-content-end">
+                <Button 
+                  variant="outline-primary"
+                  as={Link}
+                  to={`/orders/${id}/delivery-note`}
+                >
+                  <FaFileAlt className="me-1" /> Celkový seznam
+                </Button>
+                <Button 
+                  variant="outline-success"
+                  as={Link}
+                  to={`/orders/${id}/billing-data`}
+                >
+                  <FaReceipt className="me-1" /> Fakturační podklady
+                </Button>
+              </div>
+            </Col>
+          </Row>
+        </Card.Body>
+      </Card>
 
-
-      {/* Záložky pro lepší organizaci obsahu */}
+      {/* Záložky pro obsah zakázky */}
       <Tabs
         activeKey={activeTab}
         onSelect={(k) => setActiveTab(k)}
         className="mb-4"
       >
         <Tab eventKey="overview" title="Přehled">
-          <Row>
-            {/* Levý sloupec - základní informace */}
-            <Col md={6}>
-            <Card className="mb-3">
-              <Card.Header>
-                <h5 className="mb-0">Základní informace</h5>
-              </Card.Header>
-              <ListGroup variant="flush">
-                <ListGroup.Item>
-                  <strong>Název:</strong> {order.name}
-                </ListGroup.Item>
-                <ListGroup.Item>
-                  <strong>Zákazník:</strong>{' '}
-                  <Link to={`/customers/${order.customer_id}`}>
-                    {order.customer_name}
-                  </Link>
-                </ListGroup.Item>
-                <ListGroup.Item>
-                  <strong>Datum vytvoření:</strong> {formatDate(order.creation_date)}
-                </ListGroup.Item>
-                <ListGroup.Item>
-                  <strong>Předpokládaný konec:</strong>{' '}
-                  {formatDate(order.estimated_end_date) || 'Neurčeno'}
-                </ListGroup.Item>
-                <ListGroup.Item>
-                  <strong>Celková cena:</strong>{' '}
-                  {formatCurrency(calculateTotalPrice())}
-                </ListGroup.Item>
-              </ListGroup>
-            </Card>
-
-              {/* Poznámky */}
-              <Card className="mb-3">
-                <Card.Header>
-                  <h5 className="mb-0">Poznámky</h5>
-                </Card.Header>
-                <Card.Body>
-                  {order.notes || 'Žádné poznámky'}
-                </Card.Body>
-              </Card>
-            </Col>
-
-            {/* Pravý sloupec - výpůjčky a akce */}
-            <Col md={6}>
-              {/* Sekce výpůjček */}
-              <Card className="mb-3">
-                <Card.Header className="d-flex justify-content-between align-items-center">
-                  <h5 className="mb-0">Výpůjčky</h5>
-                  {user?.role === 'admin' && order.status !== 'completed' && (
-                    <div>
-                      <Button 
-                        variant="primary" 
-                        size="sm"
-                        onClick={() => setShowAddRentalModal(true)}
-                        className="me-2"
-                      >
-                        <FaPlus className="me-1" /> Přidat výpůjčku
-                      </Button>
-                      <Button 
-                        variant="warning" 
-                        size="sm"
-                        as={Link}
-                        to="/orders/batch-return"
-                      >
-                        <FaUndo className="me-1" /> Hromadná vratka
-                      </Button>
-                    </div>
+          {/* Seznam výpůjček */}
+          <Card className="mb-4">
+            <Card.Header className="bg-primary text-white">
+              <h5 className="mb-0">Výpůjčky</h5>
+            </Card.Header>
+            <div className="table-responsive">
+              <Table hover>
+                <thead>
+                  <tr>
+                    <th>Vybavení</th>
+                    <th>Množství</th>
+                    <th>Datum</th>
+                    <th>Stav</th>
+                    <th>Akce</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rentals.length > 0 ? (
+                    rentals.map(rental => (
+                      <tr key={rental.id}>
+                        <td>{rental.equipment_name}</td>
+                        <td>{rental.quantity || 1} ks</td>
+                        <td>{formatDate(rental.issue_date)}</td>
+                        <td>
+                          <Badge bg={RENTAL_STATUS[rental.status]?.color || 'secondary'}>
+                            {RENTAL_STATUS[rental.status]?.label || rental.status}
+                          </Badge>
+                        </td>
+                        <td>
+                          <Button 
+                            variant="outline-primary" 
+                            size="sm"
+                            onClick={() => {
+                              setSelectedRental(rental);
+                              setShowReturnModal(true);
+                            }}
+                            disabled={rental.status === 'returned'}
+                          >
+                            <FaUndo className="me-1" /> Vrátit
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="5" className="text-center">Žádné výpůjčky</td>
+                    </tr>
                   )}
-                </Card.Header>
-                <Table responsive hover>
+                </tbody>
+              </Table>
+            </div>
+          </Card>
+
+        </Tab>
+        
+        {/* Záložka pro pohyby podle dávek */}
+        <Tab eventKey="movements" title="Pohyby zboží">
+          {/* Výdeje zboží */}
+          <Card className="mb-4">
+            <Card.Header className="bg-success text-white">
+              <h5 className="mb-0">Výdeje zboží</h5>
+            </Card.Header>
+            {issueBatches.length > 0 ? (
+              <div className="table-responsive">
+                <Table hover>
                   <thead>
                     <tr>
-                      <th>Vybavení</th>
-                      <th>Množství</th>
                       <th>Datum</th>
+                      <th>Počet položek</th>
+                      <th>ID dávky</th>
+                      <th>Akce</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {issueBatches.map(batch => (
+                      <tr key={batch.batch_id}>
+                        <td>{formatDate(batch.date)}</td>
+                        <td>{batch.rentals.length} položek ({batch.rentals.reduce((sum, r) => sum + (parseInt(r.quantity) || 1), 0)} ks)</td>
+                        <td>
+                          <span className="text-monospace">{batch.batch_id}</span>
+                        </td>
+                        <td>
+                          <Button 
+                            variant="outline-primary" 
+                            size="sm"
+                            as={Link}
+                            to={`/orders/batch-rentals/${batch.batch_id}/delivery-note`}
+                          >
+                            <FaFileAlt className="me-1" /> Dodací list
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+            ) : (
+              <Card.Body>
+                <Alert variant="info">
+                  Žádné výdeje zboží pro tuto zakázku.
+                </Alert>
+              </Card.Body>
+            )}
+          </Card>
+
+          {/* Vratky zboží */}
+          <Card>
+            <Card.Header className="bg-warning text-dark">
+              <h5 className="mb-0">Vratky zboží</h5>
+            </Card.Header>
+            {returnBatches.length > 0 ? (
+              <div className="table-responsive">
+                <Table hover>
+                  <thead>
+                    <tr>
+                      <th>Datum</th>
+                      <th>Počet položek</th>
+                      <th>ID dávky</th>
+                      <th>Akce</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {returnBatches.map(batch => (
+                      <tr key={batch.batch_id}>
+                        <td>{formatDate(batch.date)}</td>
+                        <td>{batch.returns.length} položek ({batch.returns.reduce((sum, r) => sum + (parseInt(r.quantity) || 1), 0)} ks)</td>
+                        <td>
+                          <span className="text-monospace">{batch.batch_id}</span>
+                        </td>
+                        <td>
+                          <Button 
+                            variant="outline-primary" 
+                            size="sm"
+                            as={Link}
+                            to={`/orders/batch-returns/${batch.batch_id}/delivery-note`}
+                          >
+                            <FaFileAlt className="me-1" /> Dodací list vratky
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+            ) : (
+              <Card.Body>
+                <Alert variant="info">
+                  Žádné vratky zboží pro tuto zakázku.
+                </Alert>
+              </Card.Body>
+            )}
+          </Card>
+        </Tab>
+
+        {/* Záložka pro faktury */}
+        <Tab eventKey="billing" title="Fakturace">
+          <Card>
+            <Card.Header className="bg-info text-white d-flex justify-content-between align-items-center">
+              <h5 className="mb-0">Fakturační podklady</h5>
+              <Button 
+                variant="light" 
+                size="sm"
+                as={Link}
+                to={`/orders/${id}/billing-data`}
+              >
+                <FaPlus className="me-1" /> Vytvořit fakturační podklad
+              </Button>
+            </Card.Header>
+            {billingData && billingData.length > 0 ? (
+              <div className="table-responsive">
+                <Table hover>
+                  <thead>
+                    <tr>
+                      <th>Číslo faktury</th>
+                      <th>Datum</th>
+                      <th>Období od-do</th>
+                      <th>Celková částka</th>
                       <th>Stav</th>
                       <th>Akce</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rentals.length > 0 ? (
-                      rentals.map(rental => (
-                        <tr key={rental.id}>
-                          <td>{rental.equipment_name}</td>
-                          <td>{rental.quantity || 1} ks</td>
-                          <td>{formatDate(rental.issue_date)}</td>
-                          <td>
-                            <Badge bg={RENTAL_STATUS[rental.status]?.color || 'secondary'}>
-                              {RENTAL_STATUS[rental.status]?.label || rental.status}
-                            </Badge>
-                          </td>
-                          <td>
-                            <Button 
-                              variant="outline-primary" 
-                              size="sm"
-                              onClick={() => {
-                                setSelectedRental(rental);
-                                setShowReturnModal(true);
-                              }}
-                              disabled={rental.status === 'returned'}
-                            >
-                              <FaUndo className="me-1" /> Vrátit
-                            </Button>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="5" className="text-center">Žádné výpůjčky</td>
+                    {billingData.map(billing => (
+                      <tr key={billing.id}>
+                        <td>{billing.invoice_number}</td>
+                        <td>{formatDate(billing.billing_date)}</td>
+                        <td>
+                          {billing.billing_period_from && billing.billing_period_to ? (
+                            `${formatDate(billing.billing_period_from)} - ${formatDate(billing.billing_period_to)}`
+                          ) : (
+                            <span className="text-muted">Neuvedeno</span>
+                          )}
+                        </td>
+                        <td>{formatCurrency(billing.total_amount)}</td>
+                        <td>
+                          <Badge 
+                            bg={
+                              billing.status === 'paid' ? 'success' :
+                              billing.status === 'created' ? 'secondary' :
+                              billing.status === 'sent' ? 'primary' :
+                              billing.status === 'overdue' ? 'danger' : 'warning'
+                            }
+                          >
+                            {billing.status === 'paid' ? 'Zaplaceno' :
+                             billing.status === 'created' ? 'Vytvořeno' :
+                             billing.status === 'sent' ? 'Odesláno' :
+                             billing.status === 'overdue' ? 'Po splatnosti' : billing.status}
+                          </Badge>
+                        </td>
+                        <td>
+                          <Button 
+                            variant="outline-primary" 
+                            size="sm"
+                            as={Link}
+                            to={`/orders/${id}/billing-data/${billing.id}`}
+                          >
+                            <FaEye className="me-1" /> Detail
+                          </Button>
+                        </td>
                       </tr>
-                    )}
+                    ))}
                   </tbody>
                 </Table>
-              </Card>
-
-              {/* Dokumenty */}
-              <Card>
-                <Card.Header>
-                  <h5 className="mb-0">Dokumenty</h5>
-                </Card.Header>
-                <Card.Body>
-                  <div className="d-grid gap-2">
-                    <Button 
-                      variant="outline-primary"
-                      as={Link}
-                      to={`/orders/${id}/delivery-note`}
-                    >
-                      <FaFileAlt className="me-2" /> Dodací list zakázky
-                    </Button>
-                    <Button 
-                      variant="outline-success"
-                      as={Link}
-                      to={`/orders/${id}/billing-data`}
-                    >
-                      <FaReceipt className="me-2" /> Fakturační podklady
-                    </Button>
-                  </div>
-                </Card.Body>
-              </Card>
-            </Col>
-          </Row>
+              </div>
+            ) : (
+              <Card.Body>
+                <Alert variant="info">
+                  Žádné fakturační podklady pro tuto zakázku.
+                </Alert>
+              </Card.Body>
+            )}
+          </Card>
         </Tab>
 
-        {/* Nová záložka pro pohyby podle dávek */}
-        <Tab eventKey="movements" title="Pohyby zboží">
-          <Row>
-            <Col md={12}>
-              <Card className="mb-4">
-                <Card.Header>
-                  <h5 className="mb-0">Výdeje zboží</h5>
-                </Card.Header>
-                <Card.Body>
-                  {issueBatches.length > 0 ? (
-                    <Table responsive hover>
-                      <thead>
-                        <tr>
-                          <th>Datum</th>
-                          <th>Počet položek</th>
-                          <th>ID dávky</th>
-                          <th>Akce</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {issueBatches.map(batch => (
-                          <tr key={batch.batch_id}>
-                            <td>{formatDate(batch.date)}</td>
-                            <td>{batch.rentals.length} položek ({batch.rentals.reduce((sum, r) => sum + (parseInt(r.quantity) || 1), 0)} ks)</td>
-                            <td>
-                              <span className="text-monospace">{batch.batch_id}</span>
-                            </td>
-                            <td>
-                              <Button 
-                                variant="outline-primary" 
-                                size="sm"
-                                as={Link}
-                                to={`/orders/batch-rentals/${batch.batch_id}/delivery-note`}
-                              >
-                                <FaFileAlt className="me-1" /> Dodací list
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </Table>
-                  ) : (
-                    <Alert variant="info">
-                      Žádné výdeje zboží pro tuto zakázku.
-                    </Alert>
-                  )}
-                </Card.Body>
-              </Card>
-
-              <Card>
-                <Card.Header>
-                  <h5 className="mb-0">Vratky zboží</h5>
-                </Card.Header>
-                <Card.Body>
-                  {returnBatches.length > 0 ? (
-                    <Table responsive hover>
-                      <thead>
-                        <tr>
-                          <th>Datum</th>
-                          <th>Počet položek</th>
-                          <th>ID dávky</th>
-                          <th>Akce</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {returnBatches.map(batch => (
-                          <tr key={batch.batch_id}>
-                            <td>{formatDate(batch.date)}</td>
-                            <td>{batch.returns.length} položek ({batch.returns.reduce((sum, r) => sum + (parseInt(r.quantity) || 1), 0)} ks)</td>
-                            <td>
-                              <span className="text-monospace">{batch.batch_id}</span>
-                            </td>
-                            <td>
-                              <Button 
-                                variant="outline-primary" 
-                                size="sm"
-                                as={Link}
-                                to={`/orders/batch-returns/${batch.batch_id}/delivery-note`}
-                              >
-                                <FaFileAlt className="me-1" /> Dodací list vratky
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </Table>
-                  ) : (
-                    <Alert variant="info">
-                      Žádné vratky zboží pro tuto zakázku.
-                    </Alert>
-                  )}
-                </Card.Body>
-              </Card>
-            </Col>
-          </Row>
-        </Tab>
-
-        {/* Záložka pro faktury */}
-        <Tab eventKey="billing" title="Fakturace">
-          <Row>
-            <Col md={12}>
-              <Card>
-                <Card.Header className="d-flex justify-content-between align-items-center">
-                  <h5 className="mb-0">Fakturační podklady</h5>
-                  <Button 
-                    variant="primary" 
-                    size="sm"
-                    as={Link}
-                    to={`/orders/${id}/billing-data`}
-                  >
-                    <FaPlus className="me-1" /> Vytvořit fakturační podklad
-                  </Button>
-                </Card.Header>
-                <Card.Body>
-                  {billingData && billingData.length > 0 ? (
-                    <Table responsive hover>
-                      <thead>
-                        <tr>
-                          <th>Číslo faktury</th>
-                          <th>Datum</th>
-                          <th>Období od-do</th>
-                          <th>Celková částka</th>
-                          <th>Stav</th>
-                          <th>Akce</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {billingData.map(billing => (
-                          <tr key={billing.id}>
-                            <td>{billing.invoice_number}</td>
-                            <td>{formatDate(billing.billing_date)}</td>
-                            <td>
-                              {billing.billing_period_from && billing.billing_period_to ? (
-                                `${formatDate(billing.billing_period_from)} - ${formatDate(billing.billing_period_to)}`
-                              ) : (
-                                <span className="text-muted">Neuvedeno</span>
-                              )}
-                            </td>
-                            <td>{formatCurrency(billing.total_amount)}</td>
-                            <td>
-                              <Badge 
-                                bg={
-                                  billing.status === 'paid' ? 'success' :
-                                  billing.status === 'created' ? 'secondary' :
-                                  billing.status === 'sent' ? 'primary' :
-                                  billing.status === 'overdue' ? 'danger' : 'warning'
-                                }
-                              >
-                                {billing.status === 'paid' ? 'Zaplaceno' :
-                                 billing.status === 'created' ? 'Vytvořeno' :
-                                 billing.status === 'sent' ? 'Odesláno' :
-                                 billing.status === 'overdue' ? 'Po splatnosti' : billing.status}
-                              </Badge>
-                            </td>
-                            <td>
-                              <Button 
-                                variant="outline-primary" 
-                                size="sm"
-                                as={Link}
-                                to={`/orders/${id}/billing-data/${billing.id}`}
-                              >
-                                <FaEye className="me-1" /> Detail
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </Table>
-                  ) : (
-                    <Alert variant="info">
-                      Žádné fakturační podklady pro tuto zakázku.
-                    </Alert>
-                  )}
-                </Card.Body>
-              </Card>
-            </Col>
-          </Row>
-        </Tab>
-
-        {/* Záložka pro vratky */}
-        <Tab eventKey="returns" title="Vratky">
-          <Row>
-            <Col md={12}>
-              <Card>
-                <Card.Header>
-                  <h5 className="mb-0">Vrácené položky</h5>
-                </Card.Header>
-                <Card.Body>
-                  {returns.length > 0 ? (
-                    <Table responsive hover>
-                      <thead>
-                        <tr>
-                          <th>Vybavení</th>
-                          <th>Datum vrácení</th>
-                          <th>Množství</th>
-                          <th>Stav</th>
-                          <th>Dodatečné poplatky</th>
-                          <th>Akce</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {returns.map(returnItem => (
-                          <tr key={returnItem.id}>
-                            <td>{returnItem.equipment_name}</td>
-                            <td>{formatDate(returnItem.return_date)}</td>
-                            <td>{returnItem.quantity || 1} ks</td>
-                            <td>
-                              <Badge 
-                                bg={
-                                  returnItem.condition === 'ok' ? 'success' :
-                                  returnItem.condition === 'damaged' ? 'warning' :
-                                  returnItem.condition === 'missing' ? 'danger' : 'secondary'
-                                }
-                              >
-                                {returnItem.condition === 'ok' ? 'V pořádku' :
-                                 returnItem.condition === 'damaged' ? 'Poškozeno' :
-                                 returnItem.condition === 'missing' ? 'Chybí' : returnItem.condition}
-                              </Badge>
-                            </td>
-                            <td>{formatCurrency(returnItem.additional_charges || 0)}</td>
-                            <td>
-                              <Button 
-                                variant="outline-primary" 
-                                size="sm"
-                                as={Link}
-                                to={`/orders/returns/${returnItem.id}`}
-                              >
-                                <FaEye className="me-1" /> Detail
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </Table>
-                  ) : (
-                    <Alert variant="info">
-                      Žádné vrácené položky pro tuto zakázku.
-                    </Alert>
-                  )}
-                </Card.Body>
-              </Card>
-            </Col>
-          </Row>
-        </Tab>
       </Tabs>
 
       {/* Modální okna */}
@@ -714,7 +637,7 @@ const OrderDetail = () => {
           <Modal.Title>Přidat výpůjčku</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <AddRentalForm 
+          <ImprovedAddRentalForm 
             initialOrderId={parseInt(id)}
             onSuccess={() => {
               fetchOrderDetails();

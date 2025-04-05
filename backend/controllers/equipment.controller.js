@@ -70,11 +70,12 @@ exports.getAllEquipment = async (req, res) => {
     });
     console.log("==========================================================");
     
-    // Získání vybavení s kategoriemi
+    // Získání vybavení s kategoriemi a dodavateli
     const equipmentResult = await db.query(`
-      SELECT e.*, c.name as category_name 
+      SELECT e.*, c.name as category_name, s.name as supplier_name, s.contact_person as supplier_contact
       FROM equipment e
       LEFT JOIN equipment_categories c ON e.category_id = c.id
+      LEFT JOIN suppliers s ON e.supplier_id = s.id
       ORDER BY e.name ASC
     `);
     
@@ -124,9 +125,10 @@ exports.getEquipmentById = async (req, res) => {
   
   try {
     const result = await db.query(`
-      SELECT e.*, c.name as category_name 
+      SELECT e.*, c.name as category_name, s.name as supplier_name, s.contact_person as supplier_contact
       FROM equipment e
       LEFT JOIN equipment_categories c ON e.category_id = c.id
+      LEFT JOIN suppliers s ON e.supplier_id = s.id
       WHERE e.id = $1
     `, [id]);
     
@@ -197,7 +199,16 @@ exports.createEquipment = async (req, res) => {
     total_square_meters,
     status, 
     location, 
-    description
+    description,
+    // Nová pole pro externí vybavení
+    is_external,
+    supplier_id,
+    external_rental_cost,
+    rental_start_date,
+    rental_end_date,
+    external_reference,
+    return_date,
+    rental_status
   } = req.body;
   
   // Kontrola povinných polí
@@ -236,9 +247,11 @@ exports.createEquipment = async (req, res) => {
         name, category_id, inventory_number, article_number, product_designation,
         purchase_price, material_value, daily_rate, monthly_rate, weight_per_piece,
         square_meters_per_piece, total_stock, total_square_meters, status, location, 
-        description, photo_url
+        description, photo_url, is_external, supplier_id, external_rental_cost,
+        rental_start_date, rental_end_date, external_reference, return_date, rental_status
       ) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 
+              $18, $19, $20, $21, $22, $23, $24, $25) 
       RETURNING *
     `, [
       name, 
@@ -257,7 +270,15 @@ exports.createEquipment = async (req, res) => {
       status || 'available', 
       location, 
       description, 
-      photo_url
+      photo_url,
+      is_external === 'true' || is_external === true,
+      supplier_id || null,
+      external_rental_cost || null,
+      rental_start_date || null,
+      rental_end_date || null,
+      external_reference || null,
+      return_date || null,
+      rental_status || 'active'
     ]);
     
     res.status(201).json({
@@ -309,6 +330,18 @@ exports.updateEquipment = async (req, res) => {
     const location = req.body.location || existingEquipment.location;
     const description = req.body.description || existingEquipment.description;
     
+    // Nová pole pro externí vybavení
+    const is_external = req.body.is_external !== undefined ? 
+      (req.body.is_external === 'true' || req.body.is_external === true) : 
+      existingEquipment.is_external;
+    const supplier_id = req.body.supplier_id || existingEquipment.supplier_id;
+    const external_rental_cost = req.body.external_rental_cost || existingEquipment.external_rental_cost;
+    const rental_start_date = req.body.rental_start_date || existingEquipment.rental_start_date;
+    const rental_end_date = req.body.rental_end_date || existingEquipment.rental_end_date;
+    const external_reference = req.body.external_reference || existingEquipment.external_reference;
+    const return_date = req.body.return_date || existingEquipment.return_date;
+    const rental_status = req.body.rental_status || existingEquipment.rental_status || 'active';
+    
     // Kontrola povinných polí
     if (!name) {
       return res.status(400).json({ message: 'Název vybavení je povinný.' });
@@ -354,7 +387,9 @@ exports.updateEquipment = async (req, res) => {
       name, category_id, inventory_number, article_number, product_designation,
       purchase_price, material_value, daily_rate, monthly_rate,
       weight_per_piece, square_meters_per_piece, total_stock, total_square_meters,
-      status, location, description, photo_url
+      status, location, description, photo_url, is_external, supplier_id,
+      external_rental_cost, rental_start_date, rental_end_date, external_reference,
+      return_date, rental_status
     });
     
     const result = await db.query(`
@@ -376,8 +411,16 @@ exports.updateEquipment = async (req, res) => {
         location = $15,
         description = $16,
         photo_url = $17,
+        is_external = $18,
+        supplier_id = $19,
+        external_rental_cost = $20,
+        rental_start_date = $21,
+        rental_end_date = $22,
+        external_reference = $23,
+        return_date = $24,
+        rental_status = $25,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $18
+      WHERE id = $26
       RETURNING *
     `, [
       name, 
@@ -397,6 +440,14 @@ exports.updateEquipment = async (req, res) => {
       location, 
       description, 
       photo_url,
+      is_external,
+      supplier_id,
+      external_rental_cost,
+      rental_start_date,
+      rental_end_date,
+      external_reference,
+      return_date,
+      rental_status,
       id
     ]);
     

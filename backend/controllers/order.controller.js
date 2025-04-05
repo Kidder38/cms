@@ -3,12 +3,30 @@ const db = require('../config/db.config');
 // Získání všech zakázek
 exports.getAllOrders = async (req, res) => {
   try {
-    const result = await db.query(`
-      SELECT o.*, c.name as customer_name 
-      FROM orders o
-      LEFT JOIN customers c ON o.customer_id = c.id
-      ORDER BY o.creation_date DESC
-    `);
+    let result;
+    
+    // Pro adminy vrátíme všechny zakázky
+    if (req.user.role === 'admin') {
+      result = await db.query(`
+        SELECT o.*, c.name as customer_name 
+        FROM orders o
+        LEFT JOIN customers c ON o.customer_id = c.id
+        ORDER BY o.creation_date DESC
+      `);
+    } else {
+      // Pro běžné uživatele pouze jejich přiřazené zakázky
+      result = await db.query(`
+        SELECT o.*, c.name as customer_name 
+        FROM orders o
+        LEFT JOIN customers c ON o.customer_id = c.id
+        WHERE o.id IN (
+          SELECT order_id FROM user_order_access WHERE user_id = $1
+        ) OR o.customer_id IN (
+          SELECT customer_id FROM user_customer_access WHERE user_id = $1
+        )
+        ORDER BY o.creation_date DESC
+      `, [req.user.id]);
+    }
     
     res.status(200).json({
       count: result.rows.length,

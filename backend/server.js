@@ -33,6 +33,9 @@ app.use('/api/categories', require('./routes/category.routes'));
 app.use('/api/customers', require('./routes/customer.routes'));
 app.use('/api/orders', require('./routes/order.routes'));
 app.use('/api/import', require('./routes/import.routes'));
+app.use('/api/users', require('./routes/user.routes'));
+app.use('/api/suppliers', require('./routes/supplier.routes'));
+app.use('/api/warehouses', require('./routes/warehouse.routes'));
 
 // Základní route pro otestování API (pouze pro vývojové prostředí)
 if (process.env.NODE_ENV !== 'production') {

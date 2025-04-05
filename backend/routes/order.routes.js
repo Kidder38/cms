@@ -4,19 +4,19 @@ const orderController = require('../controllers/order.controller');
 const rentalController = require('../controllers/rental.controller');
 const returnController = require('../controllers/return.controller');
 const documentController = require('../controllers/document.controller');
-const { verifyToken, isAdmin } = require('../middleware/auth.middleware');
+const { verifyToken, isAdmin, hasOrderAccess, hasWriteAccess } = require('../middleware/auth.middleware');
 
-// Základní routy pro zakázky - přidáno verifyToken middleware
+// Základní routy pro zakázky
 router.get('/', verifyToken, orderController.getAllOrders);
-router.get('/:id', verifyToken, orderController.getOrderById);
+router.get('/:id', verifyToken, hasOrderAccess, orderController.getOrderById);
 router.post('/', verifyToken, isAdmin, orderController.createOrder);
-router.put('/:id', verifyToken, isAdmin, orderController.updateOrder);
+router.put('/:id', verifyToken, hasOrderAccess, hasWriteAccess, orderController.updateOrder);
 router.delete('/:id', verifyToken, isAdmin, orderController.deleteOrder);
 
-// Routy pro výpůjčky - přidáno verifyToken middleware
-router.get('/:order_id/rentals', verifyToken, rentalController.getRentalsByOrder);
-router.post('/:order_id/rentals', verifyToken, isAdmin, rentalController.addRental);
-router.put('/:order_id/rentals/:rental_id', verifyToken, isAdmin, rentalController.updateRental);
+// Routy pro výpůjčky
+router.get('/:order_id/rentals', verifyToken, hasOrderAccess, rentalController.getRentalsByOrder);
+router.post('/:order_id/rentals', verifyToken, hasOrderAccess, hasWriteAccess, rentalController.addRental);
+router.put('/:order_id/rentals/:rental_id', verifyToken, hasOrderAccess, hasWriteAccess, rentalController.updateRental);
 
 // Routy pro hromadné výpůjčky - přidáno verifyToken middleware
 router.get('/batch-rentals/:batch_id', verifyToken, rentalController.getRentalsByBatch);

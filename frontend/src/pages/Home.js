@@ -12,6 +12,7 @@ const Home = () => {
         <Col>
           <div className="jumbotron bg-light p-5 rounded">
             <h1 className="display-4">Půjčovna stavebního vybavení</h1>
+            <h5 className="text-danger mt-2">Pro přihlášení použijte: admin / admin123</h5>
             <p className="lead">
               Nabízíme široký sortiment profesionálního stavebního vybavení k zapůjčení. 
               Ať už jste profesionál nebo kutíl, u nás najdete vše, co potřebujete.

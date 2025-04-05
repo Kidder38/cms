@@ -1,33 +1,55 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Badge, ListGroup, Alert } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Badge, ListGroup, Alert, Table } from 'react-bootstrap';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL, formatCurrency, formatDate } from '../../config';
+import axios from '../../axios-config';
+import { API_URL, formatCurrency, formatDate, ORDER_STATUS } from '../../config';
 import { useAuth } from '../../context/AuthContext';
+import { FaEye, FaFileAlt, FaInfoCircle, FaExclamationTriangle } from 'react-icons/fa';
 
 const CustomerDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [customer, setCustomer] = useState(null);
+  const [customerOrders, setCustomerOrders] = useState([]);
+  const [filteredOrders, setFilteredOrders] = useState([]);
+  const [orderFilter, setOrderFilter] = useState('all'); // 'all', 'active', 'completed'
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
   useEffect(() => {
-    const fetchCustomer = async () => {
+    const fetchData = async () => {
+      if (!token) {
+        setLoading(false);
+        setError('Pro zobrazení detailů zákazníka je nutné být přihlášen.');
+        return;
+      }
+
       try {
-        const response = await axios.get(`${API_URL}/customers/${id}`);
-        setCustomer(response.data.customer);
+        // Načtení dat zákazníka a jeho zakázek paralelně
+        const [customerResponse, ordersResponse] = await Promise.all([
+          axios.get(`/customers/${id}`),
+          axios.get(`/customers/${id}/orders`)
+        ]);
+        
+        setCustomer(customerResponse.data.customer);
+        const orders = ordersResponse.data.orders || [];
+        setCustomerOrders(orders);
+        setFilteredOrders(orders);
         setLoading(false);
       } catch (error) {
         console.error('Chyba při načítání dat:', error);
-        setError('Nepodařilo se načíst data. Zkuste to prosím později.');
+        if (error.response?.status === 401) {
+          setError('Pro zobrazení detailů zákazníka je nutné být přihlášen.');
+        } else {
+          setError(error.response?.data?.message || 'Nepodařilo se načíst data. Zkuste to prosím později.');
+        }
         setLoading(false);
       }
     };
     
-    fetchCustomer();
-  }, [id]);
+    fetchData();
+  }, [id, token]);
   
   const handleDelete = async () => {
     if (!window.confirm('Opravdu chcete smazat tohoto zákazníka?')) {
@@ -35,7 +57,7 @@ const CustomerDetail = () => {
     }
     
     try {
-      await axios.delete(`${API_URL}/customers/${id}`);
+      await axios.delete(`/customers/${id}`);
       alert('Zákazník byl úspěšně smazán.');
       navigate('/customers');
     } catch (error) {
@@ -77,6 +99,15 @@ const CustomerDetail = () => {
     );
   }
   
+  // Filtrování zakázek dle vybraného filtru
+  useEffect(() => {
+    if (orderFilter === 'all') {
+      setFilteredOrders(customerOrders);
+    } else {
+      setFilteredOrders(customerOrders.filter(order => order.status === orderFilter));
+    }
+  }, [orderFilter, customerOrders]);
+  
   const categoryInfo = getCustomerCategoryLabel(customer.customer_category);
   
   return (
@@ -93,6 +124,15 @@ const CustomerDetail = () => {
             className="me-2"
           >
             Zpět na seznam
+          </Button>
+          
+          <Button
+            as={Link}
+            to={`/orders/new?customer=${id}`}
+            variant="success"
+            className="me-2"
+          >
+            <FaFileAlt className="me-1" /> Nová zakázka
           </Button>
           
           {user?.role === 'admin' && (
@@ -181,13 +221,157 @@ const CustomerDetail = () => {
             </ListGroup>
           </Card>
           
-          {/* V budoucnu zde může být přehled zakázek zákazníka */}
-          <Card>
+          {/* Přehled zakázek zákazníka */}
+          <Card className="mb-4">
             <Card.Header>
-              <h5 className="mb-0">Přehled aktivit</h5>
+              <h5 className="mb-0">Souhrn aktivit</h5>
             </Card.Header>
             <Card.Body>
-              <p className="text-muted">Zde bude v budoucnu zobrazen přehled zakázek a výpůjček zákazníka.</p>
+              <Row>
+                <Col md={4} className="text-center mb-3 mb-md-0">
+                  <h4>{customerOrders.length}</h4>
+                  <div className="text-muted">Celkem zakázek</div>
+                </Col>
+                <Col md={4} className="text-center mb-3 mb-md-0">
+                  <h4>{customerOrders.filter(order => order.status === 'active').length}</h4>
+                  <div className="text-muted">Aktivních zakázek</div>
+                </Col>
+                <Col md={4} className="text-center">
+                  {(() => {
+                    const activeRentals = customerOrders.reduce(
+                      (total, order) => total + parseInt(order.active_rentals || 0), 0
+                    );
+                    return (
+                      <>
+                        <h4 className={activeRentals > 10 ? 'text-warning' : ''}>
+                          {activeRentals}
+                          {activeRentals > 10 && <FaExclamationTriangle className="ms-2" title="Vysoký počet aktivních výpůjček" />}
+                        </h4>
+                        <div className="text-muted">Aktivních výpůjček</div>
+                      </>
+                    );
+                  })()}
+                </Col>
+              </Row>
+              
+              {(() => {
+                const activeRentals = customerOrders.reduce(
+                  (total, order) => total + parseInt(order.active_rentals || 0), 0
+                );
+                if (activeRentals > 10) {
+                  return (
+                    <Alert variant="warning" className="mt-3 mb-0">
+                      <FaExclamationTriangle className="me-2" />
+                      Zákazník má vysoký počet aktivních výpůjček. Zvažte kontrolu stavu zakázek.
+                    </Alert>
+                  );
+                }
+                return null;
+              })()}
+            </Card.Body>
+          </Card>
+          
+          <Card>
+            <Card.Header className="d-flex justify-content-between align-items-center">
+              <h5 className="mb-0">Přehled aktivit</h5>
+              <div className="btn-group">
+                <Button 
+                  variant={orderFilter === 'all' ? 'primary' : 'outline-primary'} 
+                  size="sm"
+                  onClick={() => setOrderFilter('all')}
+                >
+                  Všechny
+                </Button>
+                <Button 
+                  variant={orderFilter === 'active' ? 'primary' : 'outline-primary'} 
+                  size="sm"
+                  onClick={() => setOrderFilter('active')}
+                >
+                  Aktivní
+                </Button>
+                <Button 
+                  variant={orderFilter === 'completed' ? 'primary' : 'outline-primary'} 
+                  size="sm"
+                  onClick={() => setOrderFilter('completed')}
+                >
+                  Dokončené
+                </Button>
+              </div>
+            </Card.Header>
+            <Card.Body>
+              {customerOrders.length === 0 ? (
+                <div>
+                  <Alert variant="info" className="mb-3">
+                    <FaInfoCircle className="me-2" />
+                    Zákazník zatím nemá žádné zakázky.
+                  </Alert>
+                  <div className="text-center">
+                    <Button
+                      as={Link}
+                      to={`/orders/new?customer=${id}`}
+                      variant="success"
+                    >
+                      <FaFileAlt className="me-1" /> Vytvořit první zakázku
+                    </Button>
+                  </div>
+                </div>
+              ) : filteredOrders.length === 0 ? (
+                <Alert variant="info">
+                  <FaInfoCircle className="me-2" />
+                  Žádné zakázky neodpovídají vybranému filtru.
+                </Alert>
+              ) : (
+                <div className="table-responsive">
+                  <Table hover>
+                    <thead>
+                      <tr>
+                        <th>Číslo zakázky</th>
+                        <th>Název</th>
+                        <th>Vytvořeno</th>
+                        <th>Stav</th>
+                        <th>Aktivní položky</th>
+                        <th>Akce</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredOrders.map(order => (
+                        <tr key={order.id}>
+                          <td>{order.order_number}</td>
+                          <td>{order.name}</td>
+                          <td>{formatDate(order.creation_date)}</td>
+                          <td>
+                            <Badge bg={ORDER_STATUS[order.status]?.color || 'secondary'}>
+                              {ORDER_STATUS[order.status]?.label || order.status}
+                            </Badge>
+                          </td>
+                          <td>
+                            {parseInt(order.active_rentals) > 0 ? (
+                              <Badge bg="warning" pill>
+                                {order.active_rentals}
+                              </Badge>
+                            ) : (
+                              <Badge bg="success" pill>
+                                0
+                              </Badge>
+                            )}
+                          </td>
+                          <td>
+                            <Button 
+                              as={Link} 
+                              to={`/orders/${order.id}`} 
+                              variant="outline-primary" 
+                              size="sm"
+                              title="Zobrazit detail zakázky"
+                            >
+                              <FaEye /> 
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              )}
             </Card.Body>
           </Card>
         </Col>

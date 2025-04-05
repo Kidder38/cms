@@ -11,11 +11,25 @@ import Home from './pages/Home';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 
+// Nový vylepšený formulář výpůjčky
+import ImprovedAddRentalForm from './pages/orders/ImprovedAddRentalForm';
+
 // Chráněné stránky
 import Dashboard from './pages/dashboard/Dashboard';
 import EquipmentList from './pages/equipment/EquipmentList';
 import EquipmentDetail from './pages/equipment/EquipmentDetail';
 import EquipmentForm from './pages/equipment/EquipmentForm';
+import ExternalEquipmentForm from './pages/equipment/ExternalEquipmentForm';
+
+// Komponenty pro dodavatele
+import SupplierList from './pages/suppliers/SupplierList';
+import SupplierDetail from './pages/suppliers/SupplierDetail';
+import SupplierForm from './pages/suppliers/SupplierForm';
+
+// Komponenty pro sklady
+import WarehouseList from './pages/warehouses/WarehouseList';
+import WarehouseDetail from './pages/warehouses/WarehouseDetail';
+import WarehouseForm from './pages/warehouses/WarehouseForm';
 import CategoryList from './pages/categories/CategoryList';
 import CategoryForm from './pages/categories/CategoryForm';
 import CustomerList from './pages/customers/CustomerList';
@@ -35,36 +49,137 @@ import BillingData from './pages/orders/BillingData';
 import BatchDeliveryNote from './pages/orders/BatchDeliveryNote';
 import BatchReturnNote from './pages/orders/BatchReturnNote';
 
-// Kontext pro autentizaci
-import { AuthProvider } from './context/AuthContext';
+// Komponenty pro správu uživatelů
+import UserList from './pages/users/UserList';
+import UserDetail from './pages/users/UserDetail';
+import UserForm from './pages/users/UserForm';
+import UserAccessForm from './pages/users/UserAccessForm';
 
+// Kontext pro autentizaci
+import { AuthProvider, useAuth } from './context/AuthContext';
+
+// Komponenta pro ochranu admin tras
+function PrivateAdminRoute({ children }) {
+  const { user, isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Kontrola, zda je uživatel admin
+  if (user?.role !== 'admin') {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+}
+
+// Refaktor pro použití s router v6
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <AppContent />
+    </AuthProvider>
+  );
+}
+
+function AppContent() {
+  const { user } = useAuth();
+  
+  return (
+    <BrowserRouter>
         <div className="d-flex flex-column min-vh-100">
           <Navigation />
           <main className="flex-grow-1 py-4">
             <div className="container">
               <Routes>
                 {/* Veřejné routy */}
-                <Route path="/" element={<Home />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
+                <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} />
+                <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
+                <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <Register />} />
                 
                 {/* Chráněné routy */}
-                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/dashboard" element={
+                  <div>
+                    <Dashboard />
+                  </div>
+                } />
                 
-                {/* Equipment routes - nejprve specifické, pak obecné */}
-                <Route path="/equipment/new" element={<EquipmentForm />} />
-                <Route path="/equipment/edit/:id" element={<EquipmentForm />} />
-                <Route path="/equipment/:id" element={<EquipmentDetail />} />
-                <Route path="/equipment" element={<EquipmentList />} />
+                {/* Equipment routes - pouze pro adminy */}
+                <Route 
+                  path="/equipment/new" 
+                  element={
+                    <PrivateAdminRoute>
+                      <EquipmentForm />
+                    </PrivateAdminRoute>
+                  } 
+                />
+                <Route 
+                  path="/equipment/external/new" 
+                  element={
+                    <PrivateAdminRoute>
+                      <ExternalEquipmentForm />
+                    </PrivateAdminRoute>
+                  } 
+                />
+                <Route 
+                  path="/equipment/edit/:id" 
+                  element={
+                    <PrivateAdminRoute>
+                      <EquipmentForm />
+                    </PrivateAdminRoute>
+                  } 
+                />
+                <Route 
+                  path="/equipment/external/edit/:id" 
+                  element={
+                    <PrivateAdminRoute>
+                      <ExternalEquipmentForm />
+                    </PrivateAdminRoute>
+                  } 
+                />
+                <Route 
+                  path="/equipment/:id" 
+                  element={
+                    <PrivateAdminRoute>
+                      <EquipmentDetail />
+                    </PrivateAdminRoute>
+                  } 
+                />
+                <Route 
+                  path="/equipment" 
+                  element={
+                    <PrivateAdminRoute>
+                      <EquipmentList />
+                    </PrivateAdminRoute>
+                  } 
+                />
                 
-                {/* Category routes - nejprve specifické, pak obecné */}
-                <Route path="/categories/new" element={<CategoryForm />} />
-                <Route path="/categories/edit/:id" element={<CategoryForm />} />
-                <Route path="/categories" element={<CategoryList />} />
+                {/* Category routes - pouze pro adminy */}
+                <Route 
+                  path="/categories/new" 
+                  element={
+                    <PrivateAdminRoute>
+                      <CategoryForm />
+                    </PrivateAdminRoute>
+                  } 
+                />
+                <Route 
+                  path="/categories/edit/:id" 
+                  element={
+                    <PrivateAdminRoute>
+                      <CategoryForm />
+                    </PrivateAdminRoute>
+                  } 
+                />
+                <Route 
+                  path="/categories" 
+                  element={
+                    <PrivateAdminRoute>
+                      <CategoryList />
+                    </PrivateAdminRoute>
+                  } 
+                />
                 
                 {/* Customer routes - nejprve specifické, pak obecné */}
                 <Route path="/customers/new" element={<CustomerForm />} />
@@ -83,7 +198,7 @@ function App() {
                 <Route path="/orders/batch-returns/:batch_id/delivery-note" element={<BatchReturnNote />} />
                 
                 {/* 3. Cesty s order_id parametrem */}
-                <Route path="/orders/:order_id/add-rental" element={<AddRentalForm />} />
+                <Route path="/orders/:order_id/add-rental" element={<ImprovedAddRentalForm />} />
                 <Route path="/orders/:order_id/delivery-note" element={<DeliveryNote />} />
                 <Route path="/orders/:order_id/billing-data/:billing_id" element={<BillingData />} />
                 <Route path="/orders/:order_id/billing-data" element={<BillingData />} />
@@ -94,6 +209,25 @@ function App() {
                 {/* 5. Seznam zakázek - nejobecnější cesta */}
                 <Route path="/orders" element={<OrderList />} />
                 
+                {/* Supplier routes - správa dodavatelů */}
+                <Route path="/suppliers" element={<SupplierList />} />
+                <Route path="/suppliers/new" element={<SupplierForm />} />
+                <Route path="/suppliers/edit/:id" element={<SupplierForm />} />
+                <Route path="/suppliers/:id" element={<SupplierDetail />} />
+                
+                {/* Warehouse routes - správa skladů */}
+                <Route path="/warehouses" element={<WarehouseList />} />
+                <Route path="/warehouses/new" element={<WarehouseForm />} />
+                <Route path="/warehouses/edit/:id" element={<WarehouseForm />} />
+                <Route path="/warehouses/:id" element={<WarehouseDetail />} />
+                
+                {/* User routes - správa uživatelů */}
+                <Route path="/users" element={<UserList />} />
+                <Route path="/users/new" element={<UserForm />} />
+                <Route path="/users/edit/:id" element={<UserForm />} />
+                <Route path="/users/:id/access" element={<UserAccessForm />} />
+                <Route path="/users/:id" element={<UserDetail />} />
+                
                 {/* Chybějící stránka */}
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
@@ -102,8 +236,8 @@ function App() {
           <Footer />
         </div>
       </BrowserRouter>
-    </AuthProvider>
   );
 }
 
 export default App;
+
