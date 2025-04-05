@@ -17,7 +17,7 @@ const WarehouseList = () => {
   useEffect(() => {
     const fetchWarehouses = async () => {
       try {
-        const response = await axios.get('/warehouses');
+        const response = await axios.get('/api/warehouses');
         setWarehouses(response.data.warehouses);
         setFilteredWarehouses(response.data.warehouses);
         setLoading(false);

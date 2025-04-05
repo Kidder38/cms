@@ -21,8 +21,8 @@ const WarehouseDetail = () => {
       try {
         // Načtení dat skladu a jeho vybavení paralelně
         const [warehouseResponse, equipmentResponse] = await Promise.all([
-          axios.get(`/warehouses/${id}`),
-          axios.get(`/warehouses/${id}/equipment`)
+          axios.get(`/api/warehouses/${id}`),
+          axios.get(`/api/warehouses/${id}/equipment`)
         ]);
         
         setWarehouse(warehouseResponse.data.warehouse);
@@ -44,7 +44,7 @@ const WarehouseDetail = () => {
     }
     
     try {
-      await axios.delete(`/warehouses/${id}`);
+      await axios.delete(`/api/warehouses/${id}`);
       alert('Sklad byl úspěšně smazán.');
       navigate('/warehouses');
     } catch (error) {

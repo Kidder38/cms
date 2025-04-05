@@ -41,7 +41,7 @@ const WarehouseForm = () => {
   useEffect(() => {
     const fetchSuppliers = async () => {
       try {
-        const response = await axios.get('/suppliers');
+        const response = await axios.get('/api/suppliers');
         setSuppliers(response.data.suppliers);
       } catch (error) {
         console.error('Chyba při načítání dodavatelů:', error);
@@ -58,7 +58,7 @@ const WarehouseForm = () => {
       const fetchWarehouse = async () => {
         setLoading(true);
         try {
-          const response = await axios.get(`/warehouses/${id}`);
+          const response = await axios.get(`/api/warehouses/${id}`);
           const warehouseData = response.data.warehouse;
           
           setFormData({
@@ -121,14 +121,14 @@ const WarehouseForm = () => {
     try {
       if (isEditing) {
         // Aktualizace existujícího skladu
-        await axios.put(`/warehouses/${id}`, formData);
+        await axios.put(`/api/warehouses/${id}`, formData);
         setSuccess(true);
         setTimeout(() => {
           navigate(`/warehouses/${id}`);
         }, 1500);
       } else {
         // Vytvoření nového skladu
-        const response = await axios.post('/warehouses', formData);
+        const response = await axios.post('/api/warehouses', formData);
         setSuccess(true);
         setTimeout(() => {
           navigate(`/warehouses/${response.data.warehouse.id}`);
