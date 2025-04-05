@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Badge, ListGroup, Alert, Table } from 'react-bootstrap';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from '../../axios-config';
-import { API_URL, formatCurrency, formatDate, ORDER_STATUS } from '../../config';
+import { formatCurrency, formatDate, ORDER_STATUS } from '../../config';
 import { useAuth } from '../../context/AuthContext';
 import { FaEye, FaFileAlt, FaInfoCircle, FaExclamationTriangle } from 'react-icons/fa';
 
@@ -17,6 +17,7 @@ const CustomerDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  // První useEffect - načítání dat
   useEffect(() => {
     const fetchData = async () => {
       if (!token) {
@@ -50,6 +51,15 @@ const CustomerDetail = () => {
     
     fetchData();
   }, [id, token]);
+  
+  // Druhý useEffect - filtrování zakázek
+  useEffect(() => {
+    if (orderFilter === 'all') {
+      setFilteredOrders(customerOrders);
+    } else {
+      setFilteredOrders(customerOrders.filter(order => order.status === orderFilter));
+    }
+  }, [orderFilter, customerOrders]);
   
   const handleDelete = async () => {
     if (!window.confirm('Opravdu chcete smazat tohoto zákazníka?')) {
@@ -91,15 +101,6 @@ const CustomerDetail = () => {
     );
   }
   
-  // Filtrování zakázek dle vybraného filtru
-  useEffect(() => {
-    if (orderFilter === 'all') {
-      setFilteredOrders(customerOrders);
-    } else {
-      setFilteredOrders(customerOrders.filter(order => order.status === orderFilter));
-    }
-  }, [orderFilter, customerOrders]);
-  
   if (!customer) {
     return (
       <Container>
@@ -109,6 +110,9 @@ const CustomerDetail = () => {
   }
   
   const categoryInfo = getCustomerCategoryLabel(customer.customer_category);
+  const activeRentals = customerOrders.reduce(
+    (total, order) => total + parseInt(order.active_rentals || 0), 0
+  );
   
   return (
     <Container>
@@ -237,37 +241,20 @@ const CustomerDetail = () => {
                   <div className="text-muted">Aktivních zakázek</div>
                 </Col>
                 <Col md={4} className="text-center">
-                  {(() => {
-                    const activeRentals = customerOrders.reduce(
-                      (total, order) => total + parseInt(order.active_rentals || 0), 0
-                    );
-                    return (
-                      <>
-                        <h4 className={activeRentals > 10 ? 'text-warning' : ''}>
-                          {activeRentals}
-                          {activeRentals > 10 && <FaExclamationTriangle className="ms-2" title="Vysoký počet aktivních výpůjček" />}
-                        </h4>
-                        <div className="text-muted">Aktivních výpůjček</div>
-                      </>
-                    );
-                  })()}
+                  <h4 className={activeRentals > 10 ? 'text-warning' : ''}>
+                    {activeRentals}
+                    {activeRentals > 10 && <FaExclamationTriangle className="ms-2" title="Vysoký počet aktivních výpůjček" />}
+                  </h4>
+                  <div className="text-muted">Aktivních výpůjček</div>
                 </Col>
               </Row>
               
-              {(() => {
-                const activeRentals = customerOrders.reduce(
-                  (total, order) => total + parseInt(order.active_rentals || 0), 0
-                );
-                if (activeRentals > 10) {
-                  return (
-                    <Alert variant="warning" className="mt-3 mb-0">
-                      <FaExclamationTriangle className="me-2" />
-                      Zákazník má vysoký počet aktivních výpůjček. Zvažte kontrolu stavu zakázek.
-                    </Alert>
-                  );
-                }
-                return null;
-              })()}
+              {activeRentals > 10 && (
+                <Alert variant="warning" className="mt-3 mb-0">
+                  <FaExclamationTriangle className="me-2" />
+                  Zákazník má vysoký počet aktivních výpůjček. Zvažte kontrolu stavu zakázek.
+                </Alert>
+              )}
             </Card.Body>
           </Card>
           
