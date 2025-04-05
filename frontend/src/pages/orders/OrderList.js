@@ -30,15 +30,16 @@ const OrderList = () => {
   }, []);
   
   // Filtrované zakázky podle vyhledávání a stavu
-  const filteredOrders = orders.filter(order => {
+  const filteredOrders = orders?.filter(order => {
+    if (!order) return false;
     const matchesSearch = 
-      order.order_number.toLowerCase().includes(search.toLowerCase()) ||
+      order.order_number?.toLowerCase().includes(search.toLowerCase()) ||
       (order.customer_name && order.customer_name.toLowerCase().includes(search.toLowerCase()));
     
     const matchesFilter = filter === 'all' || order.status === filter;
     
     return matchesSearch && matchesFilter;
-  });
+  }) || [];
   
   if (loading) {
     return (

@@ -55,9 +55,9 @@ const CustomerDetail = () => {
   // Druhý useEffect - filtrování zakázek
   useEffect(() => {
     if (orderFilter === 'all') {
-      setFilteredOrders(customerOrders);
+      setFilteredOrders(customerOrders || []);
     } else {
-      setFilteredOrders(customerOrders.filter(order => order.status === orderFilter));
+      setFilteredOrders(customerOrders?.filter(order => order.status === orderFilter) || []);
     }
   }, [orderFilter, customerOrders]);
   
@@ -110,9 +110,9 @@ const CustomerDetail = () => {
   }
   
   const categoryInfo = getCustomerCategoryLabel(customer.customer_category);
-  const activeRentals = customerOrders.reduce(
+  const activeRentals = customerOrders?.reduce(
     (total, order) => total + parseInt(order.active_rentals || 0), 0
-  );
+  ) || 0;
   
   return (
     <Container>
@@ -233,11 +233,11 @@ const CustomerDetail = () => {
             <Card.Body>
               <Row>
                 <Col md={4} className="text-center mb-3 mb-md-0">
-                  <h4>{customerOrders.length}</h4>
+                  <h4>{customerOrders?.length || 0}</h4>
                   <div className="text-muted">Celkem zakázek</div>
                 </Col>
                 <Col md={4} className="text-center mb-3 mb-md-0">
-                  <h4>{customerOrders.filter(order => order.status === 'active').length}</h4>
+                  <h4>{customerOrders?.filter(order => order.status === 'active').length || 0}</h4>
                   <div className="text-muted">Aktivních zakázek</div>
                 </Col>
                 <Col md={4} className="text-center">

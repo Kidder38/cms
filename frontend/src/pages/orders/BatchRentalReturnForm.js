@@ -117,9 +117,9 @@ const BatchRentalReturnForm = () => {
         setOrderDetails(orderResponse.data.order);
         
         // Filtrování aktivních výpůjček, které ještě nebyly vráceny
-        const activeRentals = rentalsResponse.data.rentals.filter(
-          rental => rental.status !== 'returned'
-        );
+        const activeRentals = rentalsResponse.data.rentals?.filter(
+          rental => rental && rental.status !== 'returned'
+        ) || [];
         
         // Kategorizace vybavení
         activeRentals.forEach(rental => {

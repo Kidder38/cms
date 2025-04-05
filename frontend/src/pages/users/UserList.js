@@ -31,7 +31,7 @@ const UserList = () => {
   }, []);
 
   // Filtrace uživatelů podle vyhledávání
-  const filteredUsers = users.filter(user => {
+  const filteredUsers = users?.filter(user => {
     const searchLower = searchTerm.toLowerCase();
     return (
       user.username?.toLowerCase().includes(searchLower) ||
@@ -40,7 +40,7 @@ const UserList = () => {
       user.last_name?.toLowerCase().includes(searchLower) ||
       user.role?.toLowerCase().includes(searchLower)
     );
-  });
+  }) || [];
 
   // Formátování data pro zobrazení
   const formatDate = (dateString) => {
