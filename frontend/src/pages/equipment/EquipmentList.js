@@ -33,9 +33,11 @@ const EquipmentList = () => {
   
   // Filtrované vybavení podle vyhledávání
   const filteredEquipment = equipment?.filter(item =>
-    item && item.name?.toLowerCase().includes(search.toLowerCase()) ||
-    item && item.inventory_number?.toLowerCase().includes(search.toLowerCase()) ||
-    (item && item.category_name && item.category_name.toLowerCase().includes(search.toLowerCase()))
+    item && (
+      item.name?.toLowerCase().includes(search.toLowerCase()) ||
+      item.inventory_number?.toLowerCase().includes(search.toLowerCase()) ||
+      (item.category_name && item.category_name.toLowerCase().includes(search.toLowerCase()))
+    )
   ) || [];
   
   const handleImportComplete = () => {

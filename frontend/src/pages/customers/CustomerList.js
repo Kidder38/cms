@@ -30,10 +30,12 @@ const CustomerList = () => {
   
   // Filtrovaní zákazníci podle vyhledávání
   const filteredCustomers = customers?.filter(customer =>
-    customer && customer.name?.toLowerCase().includes(search.toLowerCase()) ||
-    (customer && customer.email && customer.email.toLowerCase().includes(search.toLowerCase())) ||
-    (customer && customer.phone && customer.phone.includes(search)) ||
-    (customer && customer.ico && customer.ico.includes(search))
+    customer && (
+      customer.name?.toLowerCase().includes(search.toLowerCase()) ||
+      (customer.email && customer.email.toLowerCase().includes(search.toLowerCase())) ||
+      (customer.phone && customer.phone.includes(search)) ||
+      (customer.ico && customer.ico.includes(search))
+    )
   ) || [];
   
   if (loading) {
