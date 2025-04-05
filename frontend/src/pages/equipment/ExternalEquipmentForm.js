@@ -62,8 +62,8 @@ const ExternalEquipmentForm = () => {
     const fetchData = async () => {
       try {
         const [categoriesResponse, suppliersResponse] = await Promise.all([
-          axios.get('/categories'),
-          axios.get('/suppliers')
+          axios.get('/api/categories'),
+          axios.get('/api/suppliers')
         ]);
         
         setCategories(categoriesResponse.data.categories);
@@ -83,7 +83,7 @@ const ExternalEquipmentForm = () => {
       const fetchEquipment = async () => {
         setLoading(true);
         try {
-          const response = await axios.get(`/equipment/${id}`);
+          const response = await axios.get(`/api/equipment/${id}`);
           const equipmentData = response.data.equipment;
           
           // Přenastavení dat formuláře
@@ -238,14 +238,14 @@ const ExternalEquipmentForm = () => {
       
       if (isEditing) {
         // Aktualizace existujícího vybavení
-        response = await axios.put(`${API_URL}/equipment/${id}`, formDataToSend, {
+        response = await axios.put(`${API_URL}/api/equipment/${id}`, formDataToSend, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
         });
       } else {
         // Vytvoření nového vybavení
-        response = await axios.post(`${API_URL}/equipment`, formDataToSend, {
+        response = await axios.post(`${API_URL}/api/equipment`, formDataToSend, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }

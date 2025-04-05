@@ -40,7 +40,7 @@ const SupplierForm = () => {
       const fetchSupplier = async () => {
         setLoading(true);
         try {
-          const response = await axios.get(`/suppliers/${id}`);
+          const response = await axios.get(`/api/suppliers/${id}`);
           const supplierData = response.data.supplier;
           
           setFormData({
@@ -90,14 +90,14 @@ const SupplierForm = () => {
     try {
       if (isEditing) {
         // Aktualizace existujícího dodavatele
-        await axios.put(`/suppliers/${id}`, formData);
+        await axios.put(`/api/suppliers/${id}`, formData);
         setSuccess(true);
         setTimeout(() => {
           navigate(`/suppliers/${id}`);
         }, 1500);
       } else {
         // Vytvoření nového dodavatele
-        const response = await axios.post('/suppliers', formData);
+        const response = await axios.post('/api/suppliers', formData);
         setSuccess(true);
         setTimeout(() => {
           navigate(`/suppliers/${response.data.supplier.id}`);

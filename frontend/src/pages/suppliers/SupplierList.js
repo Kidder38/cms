@@ -16,7 +16,7 @@ const SupplierList = () => {
   useEffect(() => {
     const fetchSuppliers = async () => {
       try {
-        const response = await axios.get('/suppliers');
+        const response = await axios.get('/api/suppliers');
         setSuppliers(response.data.suppliers);
         setFilteredSuppliers(response.data.suppliers);
         setLoading(false);
