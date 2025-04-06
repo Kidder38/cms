@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL } from '../../config';
+import axios from '../../axios-config';
 
 const OrderForm = () => {
   const { id } = useParams();
@@ -26,7 +25,7 @@ const OrderForm = () => {
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
-        const response = await axios.get(`${API_URL}/customers`);
+        const response = await axios.get(`/api/customers`);
         setCustomers(response.data.customers);
       } catch (error) {
         console.error('Chyba při načítání zákazníků:', error);
@@ -42,7 +41,7 @@ const OrderForm = () => {
       
       const fetchOrder = async () => {
         try {
-          const response = await axios.get(`${API_URL}/orders/${id}`);
+          const response = await axios.get(`/api/orders/${id}`);
           const orderData = response.data.order;
           
           setFormData({
@@ -94,10 +93,10 @@ const OrderForm = () => {
     try {
       if (isEditing) {
         // Aktualizace existující zakázky
-        await axios.put(`${API_URL}/orders/${id}`, formData);
+        await axios.put(`/api/orders/${id}`, formData);
       } else {
         // Vytvoření nové zakázky
-        await axios.post(`${API_URL}/orders`, formData);
+        await axios.post(`/api/orders`, formData);
       }
       
       setSaveSuccess(true);
@@ -136,11 +135,11 @@ const OrderForm = () => {
                     disabled={loading}
                   >
                     <option value="">Vyberte zákazníka</option>
-                    {customers.map(customer => (
+                    {customers?.map(customer => (
                       <option key={customer.id} value={customer.id}>
                         {customer.name}
                       </option>
-                    ))}
+                    )) || []}
                   </Form.Select>
                 </Form.Group>
               </Col>
