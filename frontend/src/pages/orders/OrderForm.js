@@ -3,6 +3,7 @@ import { Container, Row, Col, Card, Form, Button, Alert, Spinner } from 'react-b
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from '../../axios-config';
 import { useAuth } from '../../context/AuthContext';
+import { setAuthToken } from '../../axios-config';
 
 const OrderForm = () => {
   const { id } = useParams();
@@ -54,10 +55,19 @@ const OrderForm = () => {
           return;
         }
         
-        // Zajistíme nastavení auth hlavičky
-        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        // Použijeme centrální funkci pro nastavení tokenu
+        setAuthToken(token);
+        console.log('Token nastaven pomocí setAuthToken pro načtení zákazníků');
         
-        const response = await axios.get('/api/customers');
+        // Explicitní headers pro požadavek
+        const headers = {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        };
+        
+        console.log('Odesílám GET požadavek na /api/customers');
+        const response = await axios.get('/api/customers', { headers });
         
         // Bezpečná inicializace seznamu zákazníků - dodatečná úroveň kontroly
         if (response && response.data) {
@@ -79,10 +89,18 @@ const OrderForm = () => {
         }
       } catch (error) {
         console.error('Chyba při načítání zákazníků:', error);
+        console.error('Status chyby:', error.response?.status);
+        console.error('Data chyby:', error.response?.data);
         
         // Specifické chybové hlášení podle typu chyby
         if (error.response?.status === 401) {
           setError('Pro načtení zákazníků je nutné být přihlášen. Vaše přihlášení vypršelo nebo je neplatné.');
+          
+          // Pokud je chyba 401, pokusíme se přesměrovat na přihlášení
+          localStorage.removeItem('token');
+          setTimeout(() => {
+            navigate('/login');
+          }, 3000);
         } else if (error.response?.status === 403) {
           setError('Nemáte oprávnění pro přístup k seznamu zákazníků.');
         } else {
@@ -94,7 +112,7 @@ const OrderForm = () => {
     };
     
     loadCustomers();
-  }, [user, isEditing]);
+  }, [user, isEditing, navigate]);
   
   // Načtení dat zakázky při editaci
   useEffect(() => {
@@ -113,8 +131,9 @@ const OrderForm = () => {
           return;
         }
         
-        // Zajistíme nastavení auth hlavičky
-        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        // Použijeme centrální funkci pro nastavení tokenu
+        setAuthToken(token);
+        console.log('Token nastaven pomocí setAuthToken pro načtení zakázky');
         
         // Dodatečná kontrola ID
         if (!id || isNaN(parseInt(id))) {
@@ -124,11 +143,20 @@ const OrderForm = () => {
           return;
         }
         
-        const response = await axios.get(`/api/orders/${id}`);
+        // Explicitní headers pro požadavek
+        const headers = {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        };
+        
+        console.log(`Odesílám GET požadavek na /api/orders/${id}`);
+        const response = await axios.get(`/api/orders/${id}`, { headers });
         
         if (response && response.data) {
           if (response.data.order) {
             const orderData = response.data.order;
+            console.log('Data zakázky úspěšně načtena:', orderData);
             
             // Preventivní kontrola datových typů před nastavením do formuláře
             setFormData({
@@ -151,10 +179,19 @@ const OrderForm = () => {
         }
       } catch (error) {
         console.error('Chyba při načítání zakázky:', error);
+        console.error('Status chyby:', error.response?.status);
+        console.error('Data chyby:', error.response?.data);
+        console.error('Config chyby:', error.config);
         
         // Specifické chybové hlášení podle typu chyby
         if (error.response?.status === 401) {
           setError('Pro načtení zakázky je nutné být přihlášen. Vaše přihlášení vypršelo nebo je neplatné.');
+          
+          // Pokud je chyba 401, pokusíme se přesměrovat na přihlášení
+          localStorage.removeItem('token');
+          setTimeout(() => {
+            navigate('/login');
+          }, 3000);
         } else if (error.response?.status === 403) {
           setError('Nemáte oprávnění pro přístup k této zakázce.');
         } else if (error.response?.status === 404) {
@@ -168,7 +205,7 @@ const OrderForm = () => {
     };
     
     loadOrder();
-  }, [id, isEditing, user]);
+  }, [id, isEditing, user, navigate]);
   
   // Generování čísla zakázky
   const generateOrderNumber = () => {
@@ -190,9 +227,97 @@ const OrderForm = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
   
+  // Funkce pro testování připojení a autentizace
+  const testAuth = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Získáme token z localStorage
+      const token = localStorage.getItem('token');
+      console.log('Token z localStorage:', token ? token.substring(0, 20) + '...' : 'není k dispozici');
+      
+      // Použijeme importovanou funkci pro konzistentní nastavení tokenu
+      if (token) {
+        // Použijeme centrální funkci pro nastavení tokenu
+        setAuthToken(token);
+        console.log('Token nastaven pomocí setAuthToken pro všechny axios instance');
+      } else {
+        console.error('Token není k dispozici v localStorage');
+        
+        // Zobrazíme uživateli, že není přihlášen
+        setError('DIAGNOSTIKA SELHALA: Nejste přihlášeni, token nebyl nalezen. Zkuste se znovu přihlásit.');
+        setLoading(false);
+        return;
+      }
+      
+      // Explicitní headers pro každý požadavek
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+      
+      // Záznamenáme všechny headers pro diagnostiku
+      console.log('Hlavičky požadavku:', headers);
+      
+      // Test auth endpoint pro diagnostiku
+      console.log('Volám /api/debug/auth pro diagnostiku...');
+      const authResponse = await axios.get('/api/debug/auth', { headers });
+      console.log('Auth test response:', authResponse.data);
+      
+      // Test profilu uživatele - ověření, že token funguje
+      console.log('Volám /api/auth/profile pro ověření tokenu...');
+      const profileResponse = await axios.get('/api/auth/profile', { headers });
+      console.log('User profile:', profileResponse.data);
+      
+      // Test načtení seznamu zákazníků
+      console.log('Volám /api/customers pro ověření přístupu k zákazníkům...');
+      const customersResponse = await axios.get('/api/customers', { headers });
+      console.log('Zákazníci načteni:', customersResponse.data?.customers?.length || 0);
+      
+      // Přidáme detailnější výstup o autorizačních hlavičkách
+      console.log('Aktuální axios headers po testech:', axios.defaults.headers.common);
+      
+      setError(`DIAGNOSTIKA: Auth test úspěšný! Token je platný.
+                Uživatel: ${profileResponse.data?.user?.username || 'neznámý'}
+                Role: ${profileResponse.data?.user?.role || 'neznámá'}
+                Zákazníci: ${customersResponse.data?.customers?.length || 0} položek`);
+    } catch (err) {
+      console.error('Auth test error:', err);
+      console.error('Status chyby:', err.response?.status);
+      console.error('Data chyby:', err.response?.data);
+      console.error('Config:', err.config);
+      
+      setError('DIAGNOSTIKA SELHALA: ' + (err.response?.data?.message || err.message) + 
+              ' (Status: ' + (err.response?.status || 'neznámý') + ')');
+      
+      // Pokud je chyba 401, pokusíme se přesměrovat na přihlášení
+      if (err.response?.status === 401) {
+        localStorage.removeItem('token');
+        setTimeout(() => {
+          navigate('/login');
+        }, 3000);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Odeslání formuláře
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Diagnostický test před odesláním
+    console.log('Spouštím diagnostický test před odesláním formuláře');
+    try {
+      await testAuth();
+    } catch (testErr) {
+      console.error('Test auth selhal:', testErr);
+      setError('Diagnostika selhala, nelze pokračovat. Zkuste se znovu přihlásit.');
+      setLoading(false);
+      return; // Zastavíme další zpracování pokud auth test selhal
+    }
     
     // Ověříme, že máme platný token před odesláním
     const token = localStorage.getItem('token');
@@ -247,8 +372,9 @@ const OrderForm = () => {
     setSaveSuccess(false);
     
     try {
-      // Zajistíme nastavení auth hlavičky
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      // Nastavení tokenu pomocí centrální funkce
+      setAuthToken(token);
+      console.log('Token nastaven pomocí setAuthToken pro odeslání požadavku');
       
       // Konstrukce požadavku s explicitními kontrolami
       const requestData = {
@@ -260,15 +386,31 @@ const OrderForm = () => {
         notes: formData.notes || ''
       };
       
+      console.log('Odesílám požadavek na vytvoření/aktualizaci zakázky s daty:', requestData);
+      
+      // Explicitní headers pro každý požadavek
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+      
+      console.log('Hlavičky požadavku:', headers);
+      console.log('Aktuální axios default headers:', axios.defaults.headers.common);
+      
       let response;
       
       if (isEditing) {
-        // Aktualizace existující zakázky
-        response = await axios.put(`/api/orders/${id}`, requestData);
+        // Aktualizace existující zakázky s explicitními hlavičkami
+        console.log(`Odesílám PUT požadavek na /api/orders/${id}`);
+        response = await axios.put(`/api/orders/${id}`, requestData, { headers });
       } else {
-        // Vytvoření nové zakázky
-        response = await axios.post('/api/orders', requestData);
+        // Vytvoření nové zakázky s explicitními hlavičkami
+        console.log('Odesílám POST požadavek na /api/orders');
+        response = await axios.post('/api/orders', requestData, { headers });
       }
+      
+      console.log('Odpověď od serveru:', response.data);
       
       // Ověření odpovědi od serveru
       if (!response || !response.data) {
@@ -288,11 +430,18 @@ const OrderForm = () => {
       if (error.response) {
         console.error('Status chyby:', error.response.status);
         console.error('Data chyby:', error.response.data);
+        console.error('Hlavičky požadavku:', error.config?.headers);
       }
       
       // Specifická chybová hlášení dle stavového kódu
       if (error.response?.status === 401) {
         setError('Pro vytváření zakázek musíte být přihlášen. Přihlášení vypršelo nebo je neplatné.');
+        
+        // Pokud je chyba 401, pokusíme se přesměrovat na přihlášení
+        localStorage.removeItem('token');
+        setTimeout(() => {
+          navigate('/login');
+        }, 3000);
       } else if (error.response?.status === 403) {
         setError('Pro vytváření zakázek potřebujete administrátorská práva.');
       } else if (error.response?.status === 400) {
@@ -497,6 +646,18 @@ const OrderForm = () => {
                 disabled={loading}
               >
                 {loading ? 'Ukládání...' : 'Uložit'}
+              </Button>
+              
+              {/* Tlačítko pro testování autentizace */}
+              <Button 
+                variant="warning" 
+                onClick={(e) => {
+                  e.preventDefault(); 
+                  testAuth();
+                }}
+                disabled={loading}
+              >
+                {loading ? 'Testování...' : 'Test autentizace'}
               </Button>
             </div>
           </Form>
