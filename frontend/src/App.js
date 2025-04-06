@@ -38,6 +38,7 @@ import CustomerForm from './pages/customers/CustomerForm';
 import OrderList from './pages/orders/OrderList';
 import OrderDetail from './pages/orders/OrderDetail';
 import OrderForm from './pages/orders/OrderForm';
+import NewOrderForm from './pages/orders/NewOrderForm';
 import AddRentalForm from './pages/orders/AddRentalForm';
 import BatchRentalReturnForm from './pages/orders/BatchRentalReturnForm';
 
@@ -216,10 +217,12 @@ function AppContent() {
                 {/* Order routes - přeuspořádáno pro vyřešení konfliktu */}
                 {/* 1. Nejprve specifické cesty bez parametrů */}
                 <Route path="/orders/new" element={<OrderForm />} />
+                <Route path="/orders/new-form" element={<NewOrderForm />} />
                 <Route path="/orders/batch-return" element={<BatchRentalReturnForm />} />
                 
                 {/* 2. Specifické cesty s parametry */}
                 <Route path="/orders/edit/:id" element={<OrderForm />} />
+                <Route path="/orders/edit-new/:id" element={<NewOrderForm />} />
                 <Route path="/orders/batch-rentals/:batch_id/delivery-note" element={<BatchDeliveryNote />} />
                 <Route path="/orders/batch-returns/:batch_id/delivery-note" element={<BatchReturnNote />} />
                 

@@ -95,9 +95,14 @@ const OrderList = () => {
         
         {user?.role === 'admin' && (
           <Col md={4} className="d-flex justify-content-end">
-            <Button as={Link} to="/orders/new" variant="primary">
-              Přidat zakázku
-            </Button>
+            <div className="d-flex gap-2">
+              <Button as={Link} to="/orders/new" variant="primary">
+                Přidat zakázku
+              </Button>
+              <Button as={Link} to="/orders/new-form" variant="success">
+                Nový formulář
+              </Button>
+            </div>
           </Col>
         )}
       </Row>
@@ -146,14 +151,25 @@ const OrderList = () => {
                       </Button>
                       
                       {user?.role === 'admin' && (
-                        <Button 
-                          as={Link} 
-                          to={`/orders/edit/${order.id}`} 
-                          variant="outline-secondary" 
-                          size="sm"
-                        >
-                          Upravit
-                        </Button>
+                        <>
+                          <Button 
+                            as={Link} 
+                            to={`/orders/edit/${order.id}`} 
+                            variant="outline-secondary" 
+                            size="sm"
+                            className="me-1"
+                          >
+                            Upravit
+                          </Button>
+                          <Button 
+                            as={Link} 
+                            to={`/orders/edit-new/${order.id}`} 
+                            variant="outline-success" 
+                            size="sm"
+                          >
+                            Nový editor
+                          </Button>
+                        </>
                       )}
                     </td>
                   </tr>
