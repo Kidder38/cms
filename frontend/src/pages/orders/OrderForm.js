@@ -19,6 +19,7 @@ const OrderForm = () => {
     notes: ''
   });
   
+  // Inicializace customers jako prázdné pole pro prevenci undefined
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -43,7 +44,13 @@ const OrderForm = () => {
     const fetchCustomers = async () => {
       try {
         const response = await axios.get(`/api/customers`);
-        setCustomers(response.data?.customers || []);
+        // Explicitní kontrola a převod na pole, pokud by response.data.customers bylo undefined
+        if (response.data && Array.isArray(response.data.customers)) {
+          setCustomers(response.data.customers);
+        } else {
+          console.warn('API nevrátilo očekávané pole zákazníků:', response.data);
+          setCustomers([]);
+        }
       } catch (error) {
         console.error('Chyba při načítání zákazníků:', error);
         setError('Nepodařilo se načíst seznam zákazníků.');
@@ -182,11 +189,18 @@ const OrderForm = () => {
                     disabled={loading}
                   >
                     <option value="">Vyberte zákazníka</option>
-                    {Array.isArray(customers) ? customers.map(customer => (
-                      <option key={customer?.id} value={customer?.id}>
-                        {customer?.name || 'Zákazník bez jména'}
-                      </option>
-                    )) : null}
+                    {/* Maximální ochrana proti undefined, null a jiným neočekávaným hodnotám */}
+                    {customers && customers.length > 0 ? 
+                      customers.map(customer => (
+                        <option 
+                          key={customer?.id || 'undefined'} 
+                          value={customer?.id || ''}
+                        >
+                          {customer?.name || 'Zákazník bez jména'}
+                        </option>
+                      )) 
+                      : <option disabled>Načítání zákazníků...</option>
+                    }
                   </Form.Select>
                 </Form.Group>
               </Col>
