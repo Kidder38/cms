@@ -1,7 +1,7 @@
 // Dynamické nastavení API URL podle prostředí
 export const API_URL = process.env.NODE_ENV === 'production' 
-  ? ''  // V produkci nepoužíváme prefix /api, je již v cestách API endpointů
-  : 'http://localhost:5001';  // Při vývoji použijeme localhost
+  ? window.location.origin  // V produkci používáme stejnou doménu, /api cesty jsou již v routerech
+  : 'http://localhost:5000';  // Při vývoji použijeme localhost a port serveru
 
 // Formátování data
 export const formatDate = (dateString) => {
