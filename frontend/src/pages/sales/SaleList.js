@@ -31,14 +31,29 @@ const SaleList = () => {
           axios.get('/api/customers')
         ]);
         
-        setSales(salesRes.data.sales);
-        setFilteredSales(salesRes.data.sales);
-        setCustomers(customersRes.data.customers);
+        // Kontrola, že data existují a mají očekávanou strukturu
+        if (salesRes.data && Array.isArray(salesRes.data.sales)) {
+          setSales(salesRes.data.sales);
+          setFilteredSales(salesRes.data.sales);
+        } else {
+          console.error('Neočekávaná struktura dat z API:', salesRes.data);
+          setSales([]);
+          setFilteredSales([]);
+        }
+        
+        // Kontrola, že data zákazníků existují
+        if (customersRes.data && Array.isArray(customersRes.data.customers)) {
+          setCustomers(customersRes.data.customers);
+        } else {
+          setCustomers([]);
+        }
         
         setLoading(false);
       } catch (error) {
         console.error('Chyba při načítání prodejů:', error);
         setError('Nepodařilo se načíst seznam prodejů. Zkuste to prosím později.');
+        setSales([]);
+        setFilteredSales([]);
         setLoading(false);
       }
     };
@@ -48,35 +63,44 @@ const SaleList = () => {
   
   // Filtrování prodejů podle vyhledávacího řetězce a filtrů
   useEffect(() => {
-    let filtered = sales;
+    // Ověříme, že sales existuje jako pole
+    let filtered = Array.isArray(sales) ? sales : [];
     
     // Aplikace vyhledávání
     if (searchTerm.trim() !== '') {
       filtered = filtered.filter(sale => 
-        (sale.invoice_number && sale.invoice_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (sale.customer_name && sale.customer_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (sale.notes && sale.notes.toLowerCase().includes(searchTerm.toLowerCase()))
+        sale && (
+          (sale.invoice_number && sale.invoice_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (sale.customer_name && sale.customer_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (sale.notes && sale.notes.toLowerCase().includes(searchTerm.toLowerCase()))
+        )
       );
     }
     
     // Aplikace filtru podle data od
     if (filters.dateFrom) {
-      filtered = filtered.filter(sale => new Date(sale.sale_date) >= new Date(filters.dateFrom));
+      filtered = filtered.filter(sale => 
+        sale && sale.sale_date && new Date(sale.sale_date) >= new Date(filters.dateFrom)
+      );
     }
     
     // Aplikace filtru podle data do
     if (filters.dateTo) {
       const toDate = new Date(filters.dateTo);
       toDate.setHours(23, 59, 59, 999); // Nastavit na konec dne
-      filtered = filtered.filter(sale => new Date(sale.sale_date) <= toDate);
+      filtered = filtered.filter(sale => 
+        sale && sale.sale_date && new Date(sale.sale_date) <= toDate
+      );
     }
     
     // Aplikace filtru podle zákazníka
     if (filters.customer) {
-      filtered = filtered.filter(sale => sale.customer_id === parseInt(filters.customer));
+      filtered = filtered.filter(sale => 
+        sale && sale.customer_id === parseInt(filters.customer)
+      );
     }
     
-    setFilteredSales(filtered);
+    setFilteredSales(filtered || []);
   }, [sales, searchTerm, filters]);
   
   const handleSearchChange = (e) => {
@@ -246,7 +270,7 @@ const SaleList = () => {
       
       <Card>
         <Card.Body>
-          {filteredSales.length === 0 ? (
+          {!Array.isArray(filteredSales) || filteredSales.length === 0 ? (
             <Alert variant="info">
               {searchTerm || filters.dateFrom || filters.dateTo || filters.customer
                 ? 'Žádný prodej neodpovídá zadaným filtračním podmínkám.'
@@ -267,53 +291,59 @@ const SaleList = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSales.map(sale => (
-                    <tr key={sale.id}>
-                      <td>{formatDate(sale.sale_date)}</td>
-                      <td>{sale.invoice_number || '-'}</td>
-                      <td>
-                        {sale.customer_id ? (
-                          <Link to={`/customers/${sale.customer_id}`}>
-                            {sale.customer_name}
-                          </Link>
-                        ) : (
-                          <span>Hotovostní prodej</span>
-                        )}
-                      </td>
-                      <td>
-                        <Badge bg="info">
-                          {sale.payment_method === 'cash' && 'Hotovost'}
-                          {sale.payment_method === 'card' && 'Platební karta'}
-                          {sale.payment_method === 'bank_transfer' && 'Bankovní převod'}
-                          {sale.payment_method === 'invoice' && 'Faktura'}
-                          {!sale.payment_method && 'Neuvedeno'}
-                        </Badge>
-                      </td>
-                      <td>{sale.item_count || 0}</td>
-                      <td>{formatCurrency(sale.total_amount)}</td>
-                      <td className="text-center">
-                        <Button 
-                          variant="outline-primary" 
-                          size="sm" 
-                          className="me-2"
-                          title="Zobrazit detaily"
-                          as={Link}
-                          to={`/sales/${sale.id}`}
-                        >
-                          <FaEdit />
-                        </Button>
-                        
-                        <Button 
-                          variant="outline-success" 
-                          size="sm"
-                          title="Generovat PDF"
-                          onClick={() => generatePdf(sale.id)}
-                        >
-                          <FaFilePdf />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {Array.isArray(filteredSales) && filteredSales.map(sale => 
+                    sale && (
+                      <tr key={sale.id || `sale-${Math.random()}`}>
+                        <td>{sale.sale_date ? formatDate(sale.sale_date) : '-'}</td>
+                        <td>{sale.invoice_number || '-'}</td>
+                        <td>
+                          {sale.customer_id ? (
+                            <Link to={`/customers/${sale.customer_id}`}>
+                              {sale.customer_name || `Zákazník ID: ${sale.customer_id}`}
+                            </Link>
+                          ) : (
+                            <span>Hotovostní prodej</span>
+                          )}
+                        </td>
+                        <td>
+                          <Badge bg="info">
+                            {sale.payment_method === 'cash' && 'Hotovost'}
+                            {sale.payment_method === 'card' && 'Platební karta'}
+                            {sale.payment_method === 'bank_transfer' && 'Bankovní převod'}
+                            {sale.payment_method === 'invoice' && 'Faktura'}
+                            {!sale.payment_method && 'Neuvedeno'}
+                          </Badge>
+                        </td>
+                        <td>{sale.item_count || 0}</td>
+                        <td>{sale.total_amount !== undefined ? formatCurrency(sale.total_amount) : '-'}</td>
+                        <td className="text-center">
+                          {sale.id && (
+                            <>
+                              <Button 
+                                variant="outline-primary" 
+                                size="sm" 
+                                className="me-2"
+                                title="Zobrazit detaily"
+                                as={Link}
+                                to={`/sales/${sale.id}`}
+                              >
+                                <FaEdit />
+                              </Button>
+                              
+                              <Button 
+                                variant="outline-success" 
+                                size="sm"
+                                title="Generovat PDF"
+                                onClick={() => generatePdf(sale.id)}
+                              >
+                                <FaFilePdf />
+                              </Button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  )}
                 </tbody>
               </Table>
             </div>
