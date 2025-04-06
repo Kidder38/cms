@@ -1,6 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios, { setAuthToken } from '../axios-config';
-import { API_URL } from '../config';
 
 // Vytvoření kontextu
 const AuthContext = createContext();
@@ -21,7 +20,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (username, password) => {
     try {
       setError(null);
-      const response = await axios.post(`${API_URL}/api/auth/login`, { username, password });
+      const response = await axios.post(`/api/auth/login`, { username, password });
       
       const { token, user } = response.data;
       
@@ -44,7 +43,7 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     try {
       setError(null);
-      const response = await axios.post(`${API_URL}/api/auth/register`, userData);
+      const response = await axios.post(`/api/auth/register`, userData);
       
       const { token, user } = response.data;
       
@@ -85,7 +84,7 @@ export const AuthProvider = ({ children }) => {
         // Nastavení authorization hlavičky
         setAuthHeader(token);
         
-        const response = await axios.get(`${API_URL}/api/auth/profile`);
+        const response = await axios.get(`/api/auth/profile`);
         setUser(response.data.user);
       } catch (error) {
         console.error('Chyba při ověřování tokenu:', error);

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import axios from '../../axios-config';
-import { API_URL } from '../../config';
 import { useAuth } from '../../context/AuthContext';
 
 const ExternalEquipmentForm = () => {
@@ -238,14 +237,14 @@ const ExternalEquipmentForm = () => {
       
       if (isEditing) {
         // Aktualizace existujícího vybavení
-        response = await axios.put(`${API_URL}/api/equipment/${id}`, formDataToSend, {
+        response = await axios.put(`/api/equipment/${id}`, formDataToSend, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
         });
       } else {
         // Vytvoření nového vybavení
-        response = await axios.post(`${API_URL}/api/equipment`, formDataToSend, {
+        response = await axios.post(`/api/equipment`, formDataToSend, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
