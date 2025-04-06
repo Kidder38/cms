@@ -6,6 +6,9 @@ const { verifyToken, isAdmin } = require('../middleware/auth.middleware');
 // Všechny routy v tomto souboru vyžadují autentizaci
 router.use(verifyToken);
 
+// Získání všech prodejů zákazníka - DŮLEŽITÉ: specifičtější routy musí být před obecnějšími
+router.get('/customer/:customerId', salesController.getCustomerSales);
+
 // Získání všech prodejů - jen pro adminy
 router.get('/', isAdmin, salesController.getAllSales);
 
@@ -20,8 +23,5 @@ router.put('/:id', isAdmin, salesController.updateSale);
 
 // Smazání prodeje - vyžaduje admin práva
 router.delete('/:id', isAdmin, salesController.deleteSale);
-
-// Získání všech prodejů zákazníka
-router.get('/customer/:customerId', salesController.getCustomerSales);
 
 module.exports = router;
