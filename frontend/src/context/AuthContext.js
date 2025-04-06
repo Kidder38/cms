@@ -75,19 +75,38 @@ export const AuthProvider = ({ children }) => {
   // Ověření existujícího tokenu a získání informací o uživateli
   useEffect(() => {
     const verifyToken = async () => {
-      if (!token) {
+      // Vždy zkontrolujeme localStorage přímo (mohl být změněn v jiném tabu)
+      const storedToken = localStorage.getItem('token');
+      
+      if (!storedToken) {
+        console.warn('Žádný token v localStorage, uživatel není přihlášen');
         setLoading(false);
+        setUser(null);
+        setToken(null);
         return;
       }
       
+      // Pokud je token v localStorage, ale liší se od tokenu ve stavu,
+      // aktualizujeme stav tokenu
+      if (storedToken !== token) {
+        console.log('Token v localStorage se liší od tokenu ve stavu, aktualizuji...');
+        setToken(storedToken);
+      }
+      
       try {
-        // Nastavení authorization hlavičky
-        setAuthHeader(token);
+        // Nastavení authorization hlavičky - vždy použijeme aktuální token z localStorage
+        setAuthHeader(storedToken);
         
+        console.log('Ověřuji token...');
         const response = await axios.get(`/api/auth/profile`);
+        console.log('Profil uživatele úspěšně načten');
         setUser(response.data.user);
       } catch (error) {
         console.error('Chyba při ověřování tokenu:', error);
+        console.error('Status chyby:', error.response?.status);
+        console.error('Data chyby:', error.response?.data);
+        
+        // Vyčistit token a uživatele
         localStorage.removeItem('token');
         setToken(null);
         setUser(null);

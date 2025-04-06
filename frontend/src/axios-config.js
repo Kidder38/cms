@@ -16,13 +16,17 @@ export const setAuthToken = (token) => {
   if (token) {
     // Aplikace tokenu na všechny požadavky
     axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`; // Také nastavit na globální axios
     // Zálohovat token do localStorage, pro případ obnovení stránky
     localStorage.setItem('token', token);
+    console.log('Token nastaven:', token.substring(0, 10) + '...');
   } else {
     // Odstranění auth hlavičky
     delete axiosInstance.defaults.headers.common['Authorization'];
+    delete axios.defaults.headers.common['Authorization']; // Také odstranit z globálního axios
     // Vymazání tokenu z localStorage
     localStorage.removeItem('token');
+    console.log('Token odstraněn');
   }
 };
 
@@ -34,16 +38,22 @@ axiosInstance.defaults.raxConfig = {
   backoffType: 'static'      // Konstantní zpoždění mezi pokusy
 };
 
-// Nastavení tokenu při inicializaci
+// Nastavení tokenu při inicializaci - kritické pro správné fungování auth
 const token = localStorage.getItem('token');
 if (token) {
-  setAuthToken(token);
+  // Nastav token jak na instanci tak na globální objekt
+  axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  console.log('Token při inicializaci nastaven:', token.substring(0, 10) + '...');
+} else {
+  console.log('Žádný token nenalezen při inicializaci');
 }
 
 // Monitoring požadavků v development módu
 if (process.env.NODE_ENV !== 'production') {
   axiosInstance.interceptors.request.use((config) => {
     console.log(`${config.method.toUpperCase()} ${config.url}`);
+    console.log('Auth hlavička:', config.headers.Authorization ? 'Nastavena' : 'Nenastavena');
     return config;
   });
 }
@@ -59,18 +69,32 @@ axiosInstance.interceptors.response.use(
     }
     // V případě 401 chyby (neautorizovaný přístup)
     else if (error.response.status === 401) {
-      console.warn('Neautorizovaný přístup');
-      // Vymazání tokenu
-      setAuthToken(null);
-      // Přesměrování na přihlašovací stránku, pokud nejsme již tam
-      if (window.location.pathname !== '/login') {
-        // Použít window.location místo history.push(), protože potřebujeme kompletní refresh
-        window.location.href = '/login';
+      console.warn('Neautorizovaný přístup - 401 chyba');
+      console.warn('Endpoint:', error.config?.url);
+      console.warn('Auth Hlavička:', error.config?.headers?.Authorization ? 'Nastavena' : 'Nenastavena');
+      
+      // Zkontrolujeme, zda máme token v localStorage
+      const storedToken = localStorage.getItem('token');
+      if (storedToken) {
+        console.log('Token v localStorage nalezen, zkusím ho aplikovat');
+        // Pokusíme se nastavit token znovu
+        axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+        axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+      } else {
+        console.warn('Žádný token v localStorage');
+        // Vymazání tokenu
+        setAuthToken(null);
+        // Přesměrování na přihlašovací stránku, pokud nejsme již tam
+        if (window.location.pathname !== '/login') {
+          console.log('Přesměrování na přihlašovací stránku...');
+          // Použít window.location místo history.push(), protože potřebujeme kompletní refresh
+          window.location.href = '/login';
+        }
       }
     }
     // V případě 403 chyby (zakázaný přístup)
     else if (error.response.status === 403) {
-      console.warn('Přístup zakázán');
+      console.warn('Přístup zakázán (403 chyba)');
       // Zobrazení zprávy o nedostatečných oprávněních
     }
     // V případě 500+ chyb (chyby serveru)
