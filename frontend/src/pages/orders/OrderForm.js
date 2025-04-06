@@ -26,7 +26,7 @@ const OrderForm = () => {
     const fetchCustomers = async () => {
       try {
         const response = await axios.get(`/api/customers`);
-        setCustomers(response.data.customers);
+        setCustomers(response.data?.customers || []);
       } catch (error) {
         console.error('Chyba při načítání zákazníků:', error);
         setError('Nepodařilo se načíst seznam zákazníků.');
@@ -135,11 +135,11 @@ const OrderForm = () => {
                     disabled={loading}
                   >
                     <option value="">Vyberte zákazníka</option>
-                    {customers?.map(customer => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.name}
+                    {Array.isArray(customers) ? customers.map(customer => (
+                      <option key={customer?.id} value={customer?.id}>
+                        {customer?.name || 'Zákazník bez jména'}
                       </option>
-                    )) || []}
+                    )) : null}
                   </Form.Select>
                 </Form.Group>
               </Col>
