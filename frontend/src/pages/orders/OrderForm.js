@@ -8,8 +8,9 @@ const OrderForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditing = !!id;
-  const { user } = useAuth(); // Přidání uživatelského kontextu
+  const { user } = useAuth();
   
+  // Inicializace stavu
   const [formData, setFormData] = useState({
     customer_id: '',
     order_number: '',
@@ -19,82 +20,157 @@ const OrderForm = () => {
     notes: ''
   });
   
-  // Inicializace customers jako prázdné pole pro prevenci undefined
+  // Garantujeme, že customers bude vždy pole
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   
-  // Ověření, zda je uživatel přihlášen a má oprávnění
+  // Kontrola přihlášení a oprávnění uživatele
   useEffect(() => {
     if (!user) {
       setError('Pro přístup k této funkci musíte být přihlášen.');
-      return;
-    }
-    
-    if (!isEditing && user?.role !== 'admin') {
+    } else if (!isEditing && user.role !== 'admin') {
       setError('Pro vytvoření nové zakázky potřebujete administrátorská práva.');
-      return;
     }
   }, [user, isEditing]);
-
+  
+  // Načtení zákazníků po ověření uživatele
   useEffect(() => {
-    if (!user) return; // Neprovádět načítání, pokud uživatel není přihlášen
+    // Pokud nemáme uživatele nebo nemá oprávnění, nevoláme API
+    if (!user) return;
+    if (!isEditing && user.role !== 'admin') return;
     
-    const fetchCustomers = async () => {
+    const loadCustomers = async () => {
       try {
-        const response = await axios.get(`/api/customers`);
-        // Explicitní kontrola a převod na pole, pokud by response.data.customers bylo undefined
-        if (response.data && Array.isArray(response.data.customers)) {
-          setCustomers(response.data.customers);
+        setLoading(true);
+        
+        // Ověříme, že máme platný token před voláním API
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.warn('Token není k dispozici, přeskakuji načítání zákazníků');
+          setLoading(false);
+          setError('Pro načtení zákazníků je nutné být přihlášen.');
+          return;
+        }
+        
+        // Zajistíme nastavení auth hlavičky
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        
+        const response = await axios.get('/api/customers');
+        
+        // Bezpečná inicializace seznamu zákazníků - dodatečná úroveň kontroly
+        if (response && response.data) {
+          if (Array.isArray(response.data.customers)) {
+            // Filtrujeme případné null nebo undefined hodnoty
+            const filteredCustomers = response.data.customers.filter(customer => customer != null);
+            setCustomers(filteredCustomers);
+            
+            if (filteredCustomers.length === 0) {
+              console.warn('Seznam zákazníků je prázdný');
+            }
+          } else {
+            console.warn('Neočekávaný formát dat zákazníků - není pole:', response.data);
+            setCustomers([]);
+          }
         } else {
-          console.warn('API nevrátilo očekávané pole zákazníků:', response.data);
+          console.warn('Neočekávaný formát dat zákazníků - chybí data:', response);
           setCustomers([]);
         }
       } catch (error) {
         console.error('Chyba při načítání zákazníků:', error);
-        setError('Nepodařilo se načíst seznam zákazníků.');
+        
+        // Specifické chybové hlášení podle typu chyby
+        if (error.response?.status === 401) {
+          setError('Pro načtení zákazníků je nutné být přihlášen. Vaše přihlášení vypršelo nebo je neplatné.');
+        } else if (error.response?.status === 403) {
+          setError('Nemáte oprávnění pro přístup k seznamu zákazníků.');
+        } else {
+          setError(error.response?.data?.message || 'Nepodařilo se načíst seznam zákazníků. Zkuste to prosím později.');
+        }
+      } finally {
+        setLoading(false);
       }
     };
     
-    fetchCustomers();
+    loadCustomers();
+  }, [user, isEditing]);
+  
+  // Načtení dat zakázky při editaci
+  useEffect(() => {
+    if (!user || !isEditing) return;
     
-    // Pokud editujeme, načteme data zakázky
-    if (isEditing) {
-      setLoading(true);
-      
-      const fetchOrder = async () => {
-        try {
-          const response = await axios.get(`/api/orders/${id}`);
-          const orderData = response.data.order;
-          
-          setFormData({
-            customer_id: orderData.customer_id.toString(),
-            order_number: orderData.order_number,
-            name: orderData.name || '',
-            status: orderData.status,
-            estimated_end_date: orderData.estimated_end_date ? 
-              new Date(orderData.estimated_end_date).toISOString().split('T')[0] : '',
-            notes: orderData.notes || ''
-          });
-          
+    const loadOrder = async () => {
+      try {
+        setLoading(true);
+        
+        // Ověříme, že máme platný token před voláním API
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.warn('Token není k dispozici, přeskakuji načítání zakázky');
           setLoading(false);
-        } catch (error) {
-          console.error('Chyba při načítání zakázky:', error);
-          setError('Nepodařilo se načíst zakázku. Zkuste to prosím později.');
-          setLoading(false);
+          setError('Pro načtení zakázky je nutné být přihlášen.');
+          return;
         }
-      };
-      
-      fetchOrder();
-    }
-  }, [id, isEditing]);
+        
+        // Zajistíme nastavení auth hlavičky
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        
+        // Dodatečná kontrola ID
+        if (!id || isNaN(parseInt(id))) {
+          console.error('Neplatné ID zakázky:', id);
+          setError('Neplatné ID zakázky.');
+          setLoading(false);
+          return;
+        }
+        
+        const response = await axios.get(`/api/orders/${id}`);
+        
+        if (response && response.data) {
+          if (response.data.order) {
+            const orderData = response.data.order;
+            
+            // Preventivní kontrola datových typů před nastavením do formuláře
+            setFormData({
+              customer_id: orderData.customer_id ? orderData.customer_id.toString() : '',
+              order_number: orderData.order_number || '',
+              name: orderData.name || '',
+              status: orderData.status || 'created',
+              estimated_end_date: orderData.estimated_end_date 
+                ? new Date(orderData.estimated_end_date).toISOString().split('T')[0] 
+                : '',
+              notes: orderData.notes || ''
+            });
+          } else {
+            console.warn('Chybí pole order v odpovědi API:', response.data);
+            setError('Zakázka nebyla nalezena nebo má neplatný formát');
+          }
+        } else {
+          console.warn('Neočekávaný formát dat při načítání zakázky:', response);
+          setError('Zakázka nebyla nalezena nebo má neplatný formát');
+        }
+      } catch (error) {
+        console.error('Chyba při načítání zakázky:', error);
+        
+        // Specifické chybové hlášení podle typu chyby
+        if (error.response?.status === 401) {
+          setError('Pro načtení zakázky je nutné být přihlášen. Vaše přihlášení vypršelo nebo je neplatné.');
+        } else if (error.response?.status === 403) {
+          setError('Nemáte oprávnění pro přístup k této zakázce.');
+        } else if (error.response?.status === 404) {
+          setError('Zakázka nebyla nalezena.');
+        } else {
+          setError('Nepodařilo se načíst zakázku. ' + (error.response?.data?.message || 'Zkuste to prosím později.'));
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadOrder();
+  }, [id, isEditing, user]);
   
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-  
+  // Generování čísla zakázky
   const generateOrderNumber = () => {
     const today = new Date();
     const year = today.getFullYear().toString().substr(-2);
@@ -108,19 +184,95 @@ const OrderForm = () => {
     }));
   };
   
+  // Zpracování změn formuláře
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+  
+  // Odeslání formuláře
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Ověříme, že máme platný token před odesláním
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('Pro uložení zakázky je nutné být přihlášen. Vaše přihlášení vypršelo.');
+      return;
+    }
+    
+    // Ověříme přihlášení uživatele
+    if (!user) {
+      setError('Pro uložení zakázky je nutné být přihlášen.');
+      return;
+    }
+    
+    // Ověření oprávnění pro vytvoření zakázky
+    if (!isEditing && user.role !== 'admin') {
+      setError('Pro vytvoření nové zakázky potřebujete administrátorská práva.');
+      return;
+    }
+    
+    // Validace všech povinných polí
+    if (!formData.customer_id) {
+      setError('Vyberte zákazníka.');
+      return;
+    }
+    
+    if (!formData.order_number) {
+      setError('Zadejte číslo zakázky.');
+      return;
+    }
+    
+    if (!formData.name) {
+      setError('Zadejte název zakázky.');
+      return;
+    }
+    
+    // Převod customer_id na číslo a ověření platnosti
+    const customerIdNum = parseInt(formData.customer_id);
+    if (isNaN(customerIdNum)) {
+      setError('Neplatné ID zákazníka.');
+      return;
+    }
+    
+    // Pokud editujeme, ověříme platnost ID
+    if (isEditing && (!id || isNaN(parseInt(id)))) {
+      setError('Neplatné ID zakázky pro úpravu.');
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     setSaveSuccess(false);
     
     try {
+      // Zajistíme nastavení auth hlavičky
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      
+      // Konstrukce požadavku s explicitními kontrolami
+      const requestData = {
+        customer_id: customerIdNum,
+        order_number: formData.order_number.trim(),
+        name: formData.name.trim(),
+        status: formData.status || 'created',
+        estimated_end_date: formData.estimated_end_date || null,
+        notes: formData.notes || ''
+      };
+      
+      let response;
+      
       if (isEditing) {
         // Aktualizace existující zakázky
-        await axios.put(`/api/orders/${id}`, formData);
+        response = await axios.put(`/api/orders/${id}`, requestData);
       } else {
         // Vytvoření nové zakázky
-        await axios.post(`/api/orders`, formData);
+        response = await axios.post('/api/orders', requestData);
+      }
+      
+      // Ověření odpovědi od serveru
+      if (!response || !response.data) {
+        throw new Error('Neplatná odpověď od serveru.');
       }
       
       setSaveSuccess(true);
@@ -131,19 +283,33 @@ const OrderForm = () => {
       }, 1500);
     } catch (error) {
       console.error('Chyba při ukládání zakázky:', error);
+      
+      // Detailnější log chyby
+      if (error.response) {
+        console.error('Status chyby:', error.response.status);
+        console.error('Data chyby:', error.response.data);
+      }
+      
+      // Specifická chybová hlášení dle stavového kódu
       if (error.response?.status === 401) {
         setError('Pro vytváření zakázek musíte být přihlášen. Přihlášení vypršelo nebo je neplatné.');
       } else if (error.response?.status === 403) {
         setError('Pro vytváření zakázek potřebujete administrátorská práva.');
+      } else if (error.response?.status === 400) {
+        setError(error.response.data?.message || 'Neplatné údaje. Zkontrolujte prosím zadané hodnoty.');
+      } else if (error.response?.status === 409) {
+        setError('Zakázka s tímto číslem již existuje. Zvolte prosím jiné číslo zakázky.');
+      } else if (error.response?.status === 500) {
+        setError('Chyba na straně serveru. Zkuste to prosím později.');
       } else {
-        setError(error.response?.data?.message || 'Chyba při ukládání zakázky. Zkuste to prosím později.');
+        setError(error.response?.data?.message || error.message || 'Chyba při ukládání zakázky. Zkuste to prosím později.');
       }
     } finally {
       setLoading(false);
     }
   };
   
-  // Zobrazíme přihlašovací tlačítko, pokud uživatel není přihlášen
+  // Podmíněné renderování pro uživatele bez přihlášení
   if (!user) {
     return (
       <Container>
@@ -154,8 +320,8 @@ const OrderForm = () => {
       </Container>
     );
   }
-
-  // Zobrazíme varování o nedostatečných právech
+  
+  // Podmíněné renderování pro uživatele bez dostatečných oprávnění
   if (!isEditing && user?.role !== 'admin') {
     return (
       <Container>
@@ -166,7 +332,22 @@ const OrderForm = () => {
       </Container>
     );
   }
-
+  
+  // Zobrazení během načítání
+  if (loading && !error && !saveSuccess) {
+    return (
+      <Container>
+        <div className="text-center my-5">
+          <Spinner animation="border" role="status">
+            <span className="visually-hidden">Načítání...</span>
+          </Spinner>
+          <p className="mt-3">Načítání dat...</p>
+        </div>
+      </Container>
+    );
+  }
+  
+  // Hlavní renderování formuláře
   return (
     <Container>
       <h1 className="mb-4">{isEditing ? 'Upravit zakázku' : 'Přidat novou zakázku'}</h1>
@@ -189,18 +370,22 @@ const OrderForm = () => {
                     disabled={loading}
                   >
                     <option value="">Vyberte zákazníka</option>
-                    {/* Maximální ochrana proti undefined, null a jiným neočekávaným hodnotám */}
-                    {customers && customers.length > 0 ? 
-                      customers.map(customer => (
+                    {/* Bezpečný způsob renderování seznamu zákazníků */}
+                    {Array.isArray(customers) && customers.length > 0 && customers.map(customer => {
+                      // Ještě jedna úroveň kontroly pro každého zákazníka
+                      if (!customer) return null;
+                      return (
                         <option 
-                          key={customer?.id || 'undefined'} 
-                          value={customer?.id || ''}
+                          key={customer.id || `unknown-${Math.random()}`} 
+                          value={customer.id || ''}
                         >
-                          {customer?.name || 'Zákazník bez jména'}
+                          {customer.name || 'Zákazník bez jména'}
                         </option>
-                      )) 
-                      : <option disabled>Načítání zákazníků...</option>
-                    }
+                      );
+                    })}
+                    {(!Array.isArray(customers) || customers.length === 0) && (
+                      <option disabled>Žádní zákazníci k dispozici</option>
+                    )}
                   </Form.Select>
                 </Form.Group>
               </Col>
@@ -222,6 +407,7 @@ const OrderForm = () => {
                       variant="outline-secondary" 
                       onClick={generateOrderNumber}
                       disabled={loading || isEditing}
+                      type="button"
                     >
                       Generovat
                     </Button>

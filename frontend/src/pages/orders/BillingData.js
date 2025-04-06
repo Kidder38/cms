@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Container, Row, Col, Card, Button, Alert, Table, Form, Spinner } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FaPrint, FaDownload, FaArrowLeft, FaCalculator } from 'react-icons/fa';
-import axios from 'axios';
+import axios from '../../axios-config';
 import { API_URL, formatDate, formatCurrency, ORDER_STATUS } from '../../config';
 import { useReactToPrint } from 'react-to-print';
 import { generateBillingPdf } from '../../util/pdfUtilsAlternative';
@@ -32,12 +32,12 @@ const BillingData = () => {
     const fetchOrderData = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${API_URL}/orders/${order_id}`);
+        const response = await axios.get(`/api/orders/${order_id}`);
         setOrder(response.data.order);
         
         // Pokud máme billing_id, načteme konkrétní fakturační podklad
         if (billing_id) {
-          const billingResponse = await axios.get(`${API_URL}/orders/${order_id}/billing-data/${billing_id}`);
+          const billingResponse = await axios.get(`/api/orders/${order_id}/billing-data/${billing_id}`);
           // Zkontrolujeme, že data obsahují očekávanou strukturu
           if (billingResponse.data && billingResponse.data.billingData) {
             // Pokud v datech chybí odkaz na order, přidáme ho z již načteného objektu order
@@ -105,7 +105,7 @@ const BillingData = () => {
       // Odebrat "use_custom_period" - toto backend neočekává
       delete requestOptions.use_custom_period;
       
-      const response = await axios.post(`${API_URL}/orders/${order_id}/billing-data`, requestOptions);
+      const response = await axios.post(`/api/orders/${order_id}/billing-data`, requestOptions);
       
       // Zkontrolujeme, že billingData existuje a má očekávanou strukturu
       if (response.data && response.data.billingData) {
@@ -121,7 +121,7 @@ const BillingData = () => {
       // Pokud je to konečná fakturace a zakázka má být uzavřena
       if (billingOptions.is_final_billing && order?.status !== 'completed') {
         // Aktualizace stavu zakázky na 'completed'
-        await axios.put(`${API_URL}/orders/${order_id}`, {
+        await axios.put(`/api/orders/${order_id}`, {
           ...order,
           status: 'completed'
         });

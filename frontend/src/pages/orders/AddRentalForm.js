@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert, Table } from 'react-bootstrap';
 import { FaTrash, FaPlus, FaFileAlt } from 'react-icons/fa';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import axios from '../../axios-config';
 import { API_URL, formatCurrency, formatDate } from '../../config';
 import { useAuth } from '../../context/AuthContext';
 
@@ -79,11 +79,11 @@ const AddRentalForm = ({ initialOrderId, onSuccess }) => {
         const numericOrderId = parseInt(order_id);
         
         // Načtení zakázky
-        const orderResponse = await axios.get(`${API_URL}/orders/${numericOrderId}`);
+        const orderResponse = await axios.get(`/api/orders/${numericOrderId}`);
         setOrder(orderResponse.data.order);
         
         // Načtení dostupného vybavení - nyní už API vrací i available_stock
-        const equipmentResponse = await axios.get(`${API_URL}/equipment`);
+        const equipmentResponse = await axios.get(`/api/equipment`);
         const availableEquipment = equipmentResponse.data.equipment.filter(
           item => item.status === 'available' && (item.available_stock > 0)
         );
@@ -340,7 +340,7 @@ const AddRentalForm = ({ initialOrderId, onSuccess }) => {
       
       // Postupné ukládání jednotlivých výpůjček
       for (const rental of rentalsToSave) {
-        const response = await axios.post(`${API_URL}/orders/${numericOrderId}/rentals`, rental);
+        const response = await axios.post(`/api/orders/${numericOrderId}/rentals`, rental);
         results.push(response.data);
       }
       

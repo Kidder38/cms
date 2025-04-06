@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Button, Form, Alert, Spinner, Table } from 'react-bootstrap';
-import axios from 'axios';
+import axios from '../../axios-config';
 import { API_URL } from '../../config';
 
 const ImportEquipmentModal = ({ show, onHide, onImportComplete }) => {
@@ -18,7 +18,7 @@ const ImportEquipmentModal = ({ show, onHide, onImportComplete }) => {
 
   const downloadTemplate = async () => {
     try {
-      const response = await axios.get(`${API_URL}/import/equipment/excel/template`, {
+      const response = await axios.get(`/api/import/equipment/excel/template`, {
         responseType: 'blob'
       });
       
@@ -55,7 +55,7 @@ const ImportEquipmentModal = ({ show, onHide, onImportComplete }) => {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await axios.post(`${API_URL}/import/equipment/excel`, formData, {
+      const response = await axios.post(`/api/import/equipment/excel`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }

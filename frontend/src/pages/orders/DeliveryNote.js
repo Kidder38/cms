@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Container, Row, Col, Card, Button, Alert, Table, Spinner } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FaPrint, FaDownload, FaArrowLeft } from 'react-icons/fa';
-import axios from 'axios';
+import axios from '../../axios-config';
 import { API_URL, formatDate, formatCurrency } from '../../config';
 import { useReactToPrint } from 'react-to-print';
 import { generateDeliveryNotePdf } from '../../util/pdfUtilsAlternative.js';
@@ -20,7 +20,7 @@ const DeliveryNote = () => {
   useEffect(() => {
     const fetchDeliveryNote = async () => {
       try {
-        const response = await axios.get(`${API_URL}/orders/${order_id}/delivery-note`);
+        const response = await axios.get(`/api/orders/${order_id}/delivery-note`);
         setDeliveryNote(response.data.deliveryNote);
         setLoading(false);
       } catch (error) {

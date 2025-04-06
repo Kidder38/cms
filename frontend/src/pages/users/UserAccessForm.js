@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Button, Card, Alert, Spinner, Row, Col, Tabs, Tab, Table, Badge } from 'react-bootstrap';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL } from '../../config';
+import axios from '../../axios-config';
 
 const UserAccessForm = () => {
   const { id } = useParams();
@@ -35,13 +34,13 @@ const UserAccessForm = () => {
         setLoading(true);
         
         // Načtení detailu uživatele
-        const userResponse = await axios.get(`${API_URL}/api/users/${id}`);
+        const userResponse = await axios.get(`/api/users/${id}`);
         setUser(userResponse.data.user);
         
         // Načtení všech zákazníků a zakázek
         const [customersResponse, ordersResponse] = await Promise.all([
-          axios.get(`${API_URL}/api/customers`),
-          axios.get(`${API_URL}/api/orders`)
+          axios.get(`/api/customers`),
+          axios.get(`/api/orders`)
         ]);
         
         // Ošetření null hodnot z API
@@ -50,8 +49,8 @@ const UserAccessForm = () => {
         
         // Načtení zákazníků a zakázek přiřazených uživateli
         const [userCustomersResponse, userOrdersResponse] = await Promise.all([
-          axios.get(`${API_URL}/api/users/${id}/customers`),
-          axios.get(`${API_URL}/api/users/${id}/orders`)
+          axios.get(`/api/users/${id}/customers`),
+          axios.get(`/api/users/${id}/orders`)
         ]);
         
         // Ošetření null hodnot z API
@@ -96,7 +95,7 @@ const UserAccessForm = () => {
     try {
       setLoading(true);
       
-      const response = await axios.post(`${API_URL}/api/users/${id}/customer-access`, {
+      const response = await axios.post(`/api/users/${id}/customer-access`, {
         customerId: newCustomerAccess.customer_id,
         accessType: newCustomerAccess.access_type
       });
@@ -137,7 +136,7 @@ const UserAccessForm = () => {
     try {
       setLoading(true);
       
-      const response = await axios.post(`${API_URL}/api/users/${id}/order-access`, {
+      const response = await axios.post(`/api/users/${id}/order-access`, {
         orderId: newOrderAccess.order_id,
         accessType: newOrderAccess.access_type
       });
@@ -173,7 +172,7 @@ const UserAccessForm = () => {
     try {
       setLoading(true);
       
-      await axios.delete(`${API_URL}/api/users/${id}/customer-access`, {
+      await axios.delete(`/api/users/${id}/customer-access`, {
         data: { customerId }
       });
       
@@ -196,7 +195,7 @@ const UserAccessForm = () => {
     try {
       setLoading(true);
       
-      await axios.delete(`${API_URL}/api/users/${id}/order-access`, {
+      await axios.delete(`/api/users/${id}/order-access`, {
         data: { orderId }
       });
       
@@ -217,7 +216,7 @@ const UserAccessForm = () => {
     try {
       setLoading(true);
       
-      await axios.put(`${API_URL}/api/users/${id}/customer-access`, {
+      await axios.put(`/api/users/${id}/customer-access`, {
         customerId,
         accessType
       });
@@ -244,7 +243,7 @@ const UserAccessForm = () => {
     try {
       setLoading(true);
       
-      await axios.put(`${API_URL}/api/users/${id}/order-access`, {
+      await axios.put(`/api/users/${id}/order-access`, {
         orderId,
         accessType
       });
