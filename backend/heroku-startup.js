@@ -1,10 +1,10 @@
 /**
  * Heroku Startup Script
  * 
- * Tento skript se spouatÌ pYi startu na Heroku.
- * - OvYÌ, zda se m·me pYipojit k datab·zi
- * - Pokud ano, zkontroluje existenci potYebn˝ch tabulek
- * - Pokud neexistujÌ, vytvoYÌ je
+ * Tento skript se spou≈°t√≠ p≈ôi startu na Heroku.
+ * - Ovƒõ≈ô√≠, zda se m√°me p≈ôipojit k datab√°zi
+ * - Pokud ano, zkontroluje existenci pot≈ôebn√Ωch tabulek
+ * - Pokud neexistuj√≠, vytvo≈ô√≠ je
  */
 
 const { Pool } = require('pg');
@@ -13,34 +13,34 @@ const path = require('path');
 const { promisify } = require('util');
 const readFile = promisify(fs.readFile);
 
-// Pokud b~Ìme na Heroku, pokusÌme se nastavit datab·zi
+// Pokud bƒõ≈æ√≠me na Heroku, pokus√≠me se nastavit datab√°zi
 async function setupDatabase() {
   if (!process.env.DATABASE_URL) {
-    console.log('NenÌ nastavena promnn· DATABASE_URL, pYeskakuji inicializaci datab·ze');
+    console.log('Nen√≠ nastavena promƒõnn√° DATABASE_URL, p≈ôeskakuji inicializaci datab√°ze');
     return;
   }
 
-  console.log('Kontrola datab·ze na Heroku...');
+  console.log('Kontrola datab√°ze na Heroku...');
   
-  // VytvoYenÌ pYipojenÌ k PostgreSQL datab·zi
+  // Vytvo≈ôen√≠ p≈ôipojen√≠ k PostgreSQL datab√°zi
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
       rejectUnauthorized: false
     },
-    // SpecifickÈ nastavenÌ pro Heroku startup
-    max: 2, // Omezen˝ poet pYipojenÌ pro startup skript
+    // Specifick√© nastaven√≠ pro Heroku startup
+    max: 2, // Omezen√Ω poƒçet p≈ôipojen√≠ pro startup skript
     idleTimeoutMillis: 10000,
     connectionTimeoutMillis: 5000
   });
 
   let client;
   try {
-    // ZÌsk·nÌ klienta z poolu
+    // Z√≠sk√°n√≠ klienta z poolu
     client = await pool.connect();
-    console.log('⁄span pYipojeno k datab·zi');
+    console.log('√öspƒõ≈°nƒõ p≈ôipojeno k datab√°zi');
     
-    // Kontrola existence tabulky users (z·kladnÌ tabulka)
+    // Kontrola existence tabulky users (z√°kladn√≠ tabulka)
     const result = await client.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -49,40 +49,40 @@ async function setupDatabase() {
       );
     `);
     
-    // Pokud tabulka neexistuje, inicializujeme celou datab·zi
+    // Pokud tabulka neexistuje, inicializujeme celou datab√°zi
     if (!result.rows[0].exists) {
-      console.log('Datab·ze jeat nebyla inicializov·na, prov·dÌm inicializaci...');
+      console.log('Datab√°ze je≈°tƒõ nebyla inicializov√°na, prov√°d√≠m inicializaci...');
       
-      // NatenÌ inicializanÌho skriptu
+      // Naƒçten√≠ inicializaƒçn√≠ho skriptu
       const initScript = await readFile(path.join(__dirname, '..', 'database', 'init.sql'), 'utf8');
       
-      // SpuatnÌ skriptu
+      // Spu≈°tƒõn√≠ skriptu
       await client.query(initScript);
       
-      console.log('Datab·ze byla ˙span inicializov·na');
+      console.log('Datab√°ze byla √∫spƒõ≈°nƒõ inicializov√°na');
       
-      // PYid·nÌ alter tabulek, pokud existuje skript
+      // P≈ôid√°n√≠ alter tabulek, pokud existuje skript
       try {
         const alterScript = await readFile(path.join(__dirname, '..', 'database', 'alter_tables.sql'), 'utf8');
         await client.query(alterScript);
-        console.log('PYid·ny dalaÌ tabulky');
+        console.log('P≈ôid√°ny dal≈°√≠ tabulky');
       } catch (err) {
-        console.log('Skript pro pYid·nÌ tabulek nebyl nalezen nebo se nepodaYilo provÈst');
+        console.log('Skript pro p≈ôid√°n√≠ tabulek nebyl nalezen nebo se nepoda≈ôilo prov√©st');
       }
       
-      // PYid·nÌ dat do sklado, pokud existuje skript
+      // P≈ôid√°n√≠ dat do sklad≈Ø, pokud existuje skript
       try {
         const warehousesScript = await readFile(path.join(__dirname, '..', 'database', 'warehouses.sql'), 'utf8');
         await client.query(warehousesScript);
-        console.log('PYid·ny v˝chozÌ sklady');
+        console.log('P≈ôid√°ny v√Ωchoz√≠ sklady');
       } catch (err) {
-        console.log('Skript pro pYid·nÌ sklado nebyl nalezen nebo se nepodaYilo provÈst');
+        console.log('Skript pro p≈ôid√°n√≠ sklad≈Ø nebyl nalezen nebo se nepoda≈ôilo prov√©st');
       }
     } else {
-      console.log('Datab·ze ji~ byla inicializov·na, pYeskakuji');
+      console.log('Datab√°ze ji≈æ byla inicializov√°na, p≈ôeskakuji');
     }
   } catch (err) {
-    console.error('Chyba pYi kontrole datab·ze:', err);
+    console.error('Chyba p≈ôi kontrole datab√°ze:', err);
   } finally {
     if (client) {
       client.release();
@@ -91,7 +91,7 @@ async function setupDatabase() {
   }
 }
 
-// SpuatnÌ funkce
+// Spu≈°tƒõn√≠ funkce
 setupDatabase().catch(err => {
-  console.error('Chyba pYi inicializaci aplikace:', err);
+  console.error('Chyba p≈ôi inicializaci aplikace:', err);
 });
