@@ -86,8 +86,56 @@ const UserForm = () => {
     return null;
   };
 
+  // Funkce pro testování připojení a autentizace
+  const testAuth = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Získáme token z localStorage
+      const token = localStorage.getItem('token');
+      console.log('Token z localStorage:', token ? token.substring(0, 20) + '...' : 'není k dispozici');
+      
+      // Explicitně nastavíme token do hlavičky
+      if (token) {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        console.log('Token nastaven do hlavičky');
+      } else {
+        console.error('Token není k dispozici v localStorage');
+      }
+      
+      // Test auth endpoint pro diagnostiku
+      const authResponse = await axios.get('/api/debug/auth');
+      console.log('Auth test response:', authResponse.data);
+      
+      // Test profilu uživatele - ověření, že token funguje
+      const profileResponse = await axios.get('/api/auth/profile');
+      console.log('User profile:', profileResponse.data);
+      
+      setError('DIAGNOSTIKA: Auth test úspěšný! Token je platný.');
+    } catch (err) {
+      console.error('Auth test error:', err);
+      setError('DIAGNOSTIKA SELHALA: ' + (err.response?.data?.message || err.message) + 
+              ' (Status: ' + (err.response?.status || 'neznámý') + ')');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Nejprve provedeme diagnostický test
+    try {
+      setLoading(true);
+      await testAuth(); // Test připojení
+      setLoading(false);
+    } catch (testErr) {
+      console.error('Test auth selhal:', testErr);
+      setError('Diagnostický test selhal: ' + testErr.message);
+      setLoading(false);
+      return; // Zastavíme další zpracování
+    }
     
     const validationError = validateForm();
     if (validationError) {
@@ -97,7 +145,13 @@ const UserForm = () => {
     
     try {
       setLoading(true);
-      setError(null);
+      
+      // Explicitně znovu nastavíme token
+      const token = localStorage.getItem('token');
+      if (token) {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        console.log('Token nastaven pro požadavek:', token.substring(0, 20) + '...');
+      }
       
       // Vytvoření objektu s daty uživatele
       const userData = {
@@ -125,15 +179,34 @@ const UserForm = () => {
           });
         }
       } else {
-        // Vytvoření nového uživatele
-        await axios.post(`/api/users`, userData);
+        // Vytvoření nového uživatele s logovacími výpisy
+        console.log('Posílám data uživatele:', userData);
+        
+        // Logovací výpis hlaviček
+        console.log('Hlavičky požadavku:', axios.defaults.headers.common);
+        
+        // Vytvoření nového uživatele s explicitní hlavičkou Authorization
+        const response = await axios.post('/api/users', userData, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        console.log('Odpověď serveru:', response.data);
       }
       
       // Přesměrování na seznam uživatelů
       navigate('/users');
     } catch (err) {
       console.error('Chyba při ukládání uživatele:', err);
-      setError('Nepodařilo se uložit uživatele. ' + (err.response?.data?.message || err.message));
+      console.error('Status chyby:', err.response?.status);
+      console.error('Data chyby:', err.response?.data);
+      console.error('Config:', err.config);
+      
+      // Podrobnější chybová zpráva
+      setError('Nepodařilo se uložit uživatele. ' + 
+               (err.response?.data?.message || err.message) +
+               ' (Status: ' + (err.response?.status || 'neznámý') + ')');
     } finally {
       setLoading(false);
     }
@@ -298,6 +371,18 @@ const UserForm = () => {
               )}
               <Button variant="secondary" as={Link} to="/users">
                 Zrušit
+              </Button>
+              
+              {/* Tlačítko pro testování autentizace */}
+              <Button 
+                variant="warning" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  testAuth();
+                }}
+                disabled={loading}
+              >
+                {loading ? 'Testování...' : 'Test autentizace'}
               </Button>
             </div>
           </Form>

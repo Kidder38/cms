@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
@@ -95,7 +95,22 @@ function App() {
 }
 
 function AppContent() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  
+  // Explicitně nastavit token při každém renderování App
+  useEffect(() => {
+    if (token) {
+      // Zajistíme, že axios má vždy nastavený token v hlavičkách
+      const axios = require('axios');
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      
+      // Nastavíme token také pro náš konfigurovaný axios
+      const configuredAxios = require('./axios-config').default;
+      configuredAxios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      
+      console.log('Token byl nastaven v App.js pro všechny axios instance');
+    }
+  }, [token]);
   
   return (
     <BrowserRouter>
