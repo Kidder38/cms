@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert, Spinner, Badge } from 'react-bootstrap';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import axios from '../../axios-config';
-import { setAuthToken } from '../../axios-config';
 import { useAuth } from '../../context/AuthContext';
+
+// Import axios základního balíčku místo nakonfigurované instance
+import axios from 'axios';
+import { API_URL } from '../../config';
 
 const NewOrderForm = () => {
   // Hooks pro navigaci a získání ID z URL
@@ -12,7 +14,7 @@ const NewOrderForm = () => {
   const isEditing = !!id;
   
   // Autentizační kontext
-  const { user, token, isAuthenticated } = useAuth();
+  const { user, token } = useAuth();
   
   // Stav formuláře
   const [formData, setFormData] = useState({
@@ -31,14 +33,67 @@ const NewOrderForm = () => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [authStatus, setAuthStatus] = useState(null);
   
-  // Funkce pro ověření tokenu
+  // Vytvoření autorizačních hlaviček pro požadavky
+  const createAuthHeaders = useCallback(() => {
+    const currentToken = token || localStorage.getItem('token');
+    if (!currentToken) {
+      return {};
+    }
+    
+    return {
+      'Authorization': `Bearer ${currentToken}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
+  }, [token]);
+  
+  // Bezpečná metoda pro API požadavky s ošetřením chyb
+  const callApi = useCallback(async (method, endpoint, data = null) => {
+    try {
+      const headers = createAuthHeaders();
+      const url = `${API_URL}${endpoint}`;
+      
+      console.log(`Odesílám ${method} požadavek na ${url}`);
+      console.log('Hlavičky:', headers);
+      if (data) {
+        console.log('Data:', data);
+      }
+      
+      const config = {
+        method,
+        url,
+        headers,
+        data
+      };
+      
+      const response = await axios(config);
+      return response.data;
+    } catch (error) {
+      console.error('API chyba:', error);
+      
+      // Pokud je chyba autentizace, nastav stav
+      if (error.response?.status === 401) {
+        setAuthStatus({
+          status: 'error',
+          message: 'Přihlášení vypršelo nebo je neplatné. Přihlaste se znovu.'
+        });
+        
+        // Po chvíli přesměruj na přihlašovací stránku
+        setTimeout(() => {
+          localStorage.removeItem('token');
+          navigate('/login');
+        }, 2000);
+      }
+      
+      throw error;
+    }
+  }, [createAuthHeaders, navigate]);
+  
+  // Funkce pro ověření přihlášení
   const verifyAuth = useCallback(async () => {
     try {
-      // Získání tokenu z kontextu nebo localStorage
       const currentToken = token || localStorage.getItem('token');
-      
       if (!currentToken) {
-        console.error('Není k dispozici žádný autentizační token');
         setAuthStatus({ 
           status: 'error', 
           message: 'Nejste přihlášeni. Přihlaste se prosím.' 
@@ -46,140 +101,110 @@ const NewOrderForm = () => {
         return false;
       }
       
-      // Nastavení tokenu pro axios
-      setAuthToken(currentToken);
+      const profileData = await callApi('get', '/api/auth/profile');
       
-      // Testovací volání API pro ověření platnosti tokenu
-      const profileResponse = await axios.get('/api/auth/profile', {
-        headers: { 'Authorization': `Bearer ${currentToken}` }
-      });
-      
-      if (profileResponse.data && profileResponse.data.user) {
+      if (profileData && profileData.user) {
         setAuthStatus({ 
           status: 'success', 
-          message: `Přihlášen jako ${profileResponse.data.user.username} (${profileResponse.data.user.role})` 
+          message: `Přihlášen jako ${profileData.user.username} (${profileData.user.role})` 
         });
         return true;
       }
       
       return false;
     } catch (error) {
-      console.error('Chyba při ověřování tokenu:', error);
+      console.error('Chyba při ověřování přihlášení:', error);
       setAuthStatus({ 
         status: 'error', 
         message: 'Token je neplatný nebo vypršel. Přihlaste se znovu.' 
       });
       return false;
     }
-  }, [token]);
+  }, [token, callApi]);
   
-  // Funkce pro načtení seznamu zákazníků
+  // Funkce pro načtení zákazníků
   const fetchCustomers = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return [];
+      const response = await callApi('get', '/api/customers');
       
-      setAuthToken(token);
-      
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      };
-      
-      const response = await axios.get('/api/customers', { headers });
-      
-      if (response.data && Array.isArray(response.data.customers)) {
-        return response.data.customers.filter(c => c != null) || [];
+      if (response && Array.isArray(response.customers)) {
+        // Filtrujeme případné null hodnoty
+        return response.customers.filter(c => c != null) || [];
       }
       
       return [];
     } catch (error) {
       console.error('Chyba při načítání zákazníků:', error);
-      throw error;
+      return [];
     }
-  }, []);
+  }, [callApi]);
   
-  // Funkce pro načtení detailu zakázky
-  const fetchOrderDetail = useCallback(async (orderId) => {
+  // Funkce pro načtení zakázky
+  const fetchOrder = useCallback(async (orderId) => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token || !orderId) return null;
+      if (!orderId) return null;
       
-      setAuthToken(token);
+      const response = await callApi('get', `/api/orders/${orderId}`);
       
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      };
-      
-      const response = await axios.get(`/api/orders/${orderId}`, { headers });
-      
-      if (response.data && response.data.order) {
-        return response.data.order;
+      if (response && response.order) {
+        return response.order;
       }
       
       return null;
     } catch (error) {
-      console.error('Chyba při načítání detailu zakázky:', error);
-      throw error;
+      console.error(`Chyba při načítání zakázky ID ${orderId}:`, error);
+      return null;
     }
-  }, []);
+  }, [callApi]);
   
-  // Efekt pro inicializaci - ověření přihlášení
+  // Načtení dat při inicializaci komponenty
   useEffect(() => {
-    const initializeForm = async () => {
+    const initializeComponent = async () => {
       setLoading(true);
       try {
-        // Nejprve ověříme autentizaci
+        // Ověř přihlášení
         const isAuthenticated = await verifyAuth();
         if (!isAuthenticated) {
           setLoading(false);
           return;
         }
         
-        // Načteme zákazníky
+        // Načti zákazníky
         const customersList = await fetchCustomers();
         setCustomers(customersList);
         
-        // Pokud editujeme, načteme detail zakázky
+        // Pokud editujeme, načti existující zakázku
         if (isEditing && id) {
-          const orderDetail = await fetchOrderDetail(id);
+          const orderData = await fetchOrder(id);
           
-          if (orderDetail) {
+          if (orderData) {
+            // Správné formátování dat
             setFormData({
-              customer_id: orderDetail.customer_id ? orderDetail.customer_id.toString() : '',
-              order_number: orderDetail.order_number || '',
-              name: orderDetail.name || '',
-              status: orderDetail.status || 'created',
-              estimated_end_date: orderDetail.estimated_end_date 
-                ? new Date(orderDetail.estimated_end_date).toISOString().split('T')[0] 
+              customer_id: orderData.customer_id ? orderData.customer_id.toString() : '',
+              order_number: orderData.order_number || '',
+              name: orderData.name || '',
+              status: orderData.status || 'created',
+              estimated_end_date: orderData.estimated_end_date 
+                ? new Date(orderData.estimated_end_date).toISOString().split('T')[0] 
                 : '',
-              notes: orderDetail.notes || ''
+              notes: orderData.notes || ''
             });
+          } else {
+            setError('Nepodařilo se načíst data zakázky.');
           }
         }
       } catch (error) {
-        console.error('Chyba při inicializaci formuláře:', error);
-        if (error.response?.status === 401) {
-          setError('Pro přístup k této funkci musíte být přihlášen. Vaše přihlášení vypršelo.');
-          // Přesměrování na login po krátké prodlevě
-          setTimeout(() => {
-            navigate('/login');
-          }, 2000);
-        } else {
-          setError(`Chyba při načítání dat: ${error.message}`);
-        }
+        console.error('Chyba při inicializaci:', error);
+        setError(`Chyba při načítání dat: ${error.message || 'Neznámá chyba'}`);
       } finally {
         setLoading(false);
       }
     };
     
-    initializeForm();
-  }, [isEditing, id, verifyAuth, fetchCustomers, fetchOrderDetail, navigate]);
+    initializeComponent();
+  }, [id, isEditing, verifyAuth, fetchCustomers, fetchOrder]);
   
-  // Funkce pro generování čísla zakázky
+  // Generování čísla zakázky
   const generateOrderNumber = () => {
     const today = new Date();
     const year = today.getFullYear().toString().substr(-2);
@@ -193,7 +218,7 @@ const NewOrderForm = () => {
     }));
   };
   
-  // Handler pro změny v polích formuláře
+  // Změna hodnot formuláře
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -202,7 +227,7 @@ const NewOrderForm = () => {
   // Validace formuláře
   const validateForm = () => {
     // Ověření přihlášení
-    if (!isAuthenticated || !user) {
+    if (!user) {
       return 'Pro vytvoření zakázky je nutné být přihlášen.';
     }
     
@@ -224,21 +249,16 @@ const NewOrderForm = () => {
       return 'Zadejte název zakázky.';
     }
     
-    // Převod customer_id na číslo a ověření platnosti
+    // Validace hodnot
     const customerIdNum = parseInt(formData.customer_id);
     if (isNaN(customerIdNum)) {
       return 'Neplatné ID zákazníka.';
     }
     
-    // Pokud editujeme, ověříme platnost ID
-    if (isEditing && (!id || isNaN(parseInt(id)))) {
-      return 'Neplatné ID zakázky pro úpravu.';
-    }
-    
     return null;
   };
   
-  // Funkce pro uložení formuláře
+  // Odeslání formuláře
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -254,15 +274,7 @@ const NewOrderForm = () => {
     setSaveSuccess(false);
     
     try {
-      // Získání a nastavení tokenu
-      const currentToken = token || localStorage.getItem('token');
-      if (!currentToken) {
-        throw new Error('Pro uložení zakázky je nutné být přihlášen.');
-      }
-      
-      setAuthToken(currentToken);
-      
-      // Příprava dat pro odeslání
+      // Příprava dat
       const requestData = {
         customer_id: parseInt(formData.customer_id),
         order_number: formData.order_number.trim(),
@@ -272,25 +284,18 @@ const NewOrderForm = () => {
         notes: formData.notes || ''
       };
       
-      // Explicitní hlavičky
-      const headers = {
-        'Authorization': `Bearer ${currentToken}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      };
-      
       // Odeslání požadavku
       let response;
       if (isEditing) {
-        response = await axios.put(`/api/orders/${id}`, requestData, { headers });
+        response = await callApi('put', `/api/orders/${id}`, requestData);
       } else {
-        response = await axios.post('/api/orders', requestData, { headers });
+        response = await callApi('post', '/api/orders', requestData);
       }
       
       // Zpracování odpovědi
-      console.log('Odpověď od serveru:', response.data);
+      console.log('Odpověď od serveru:', response);
       
-      // Označení úspěchu a přesměrování
+      // Úspěch
       setSaveSuccess(true);
       setTimeout(() => {
         navigate('/orders');
@@ -298,29 +303,21 @@ const NewOrderForm = () => {
     } catch (error) {
       console.error('Chyba při ukládání zakázky:', error);
       
-      // Detailní logování chyby
-      if (error.response) {
-        console.error('Status chyby:', error.response.status);
-        console.error('Data chyby:', error.response.data);
-      }
-      
       // Zpracování různých typů chyb
-      if (error.response?.status === 401) {
-        setError('Pro vytváření zakázek musíte být přihlášen. Přihlášení vypršelo nebo je neplatné.');
-        
-        // Přesměrování na login po neúspěšné autentizaci
-        localStorage.removeItem('token');
-        setTimeout(() => {
-          navigate('/login');
-        }, 2000);
-      } else if (error.response?.status === 403) {
-        setError('Pro vytváření zakázek potřebujete administrátorská práva.');
-      } else if (error.response?.status === 400) {
-        setError(error.response.data?.message || 'Neplatné údaje. Zkontrolujte prosím zadané hodnoty.');
-      } else if (error.response?.status === 409) {
-        setError('Zakázka s tímto číslem již existuje. Zvolte prosím jiné číslo zakázky.');
+      if (error.response) {
+        if (error.response.status === 401) {
+          setError('Pro vytváření zakázek musíte být přihlášen. Přihlášení vypršelo nebo je neplatné.');
+        } else if (error.response.status === 403) {
+          setError('Pro vytváření zakázek potřebujete administrátorská práva.');
+        } else if (error.response.status === 400) {
+          setError(error.response.data?.message || 'Neplatné údaje. Zkontrolujte prosím zadané hodnoty.');
+        } else if (error.response.status === 409) {
+          setError('Zakázka s tímto číslem již existuje. Zvolte prosím jiné číslo zakázky.');
+        } else {
+          setError(`Chyba serveru (${error.response.status}): ${error.response.data?.message || 'Neznámá chyba'}`);
+        }
       } else {
-        setError(error.message || 'Chyba při ukládání zakázky. Zkuste to prosím později.');
+        setError(`Chyba: ${error.message || 'Neznámá chyba. Zkuste to prosím později.'}`);
       }
     } finally {
       setLoading(false);
@@ -340,7 +337,7 @@ const NewOrderForm = () => {
   }
   
   // Render pro uživatele bez přihlášení
-  if (!isAuthenticated || !user) {
+  if (!user) {
     return (
       <Container>
         <Alert variant="danger">
