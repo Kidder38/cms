@@ -456,8 +456,8 @@ const WriteOffForm = () => {
           // Získání odpisu se všemi daty
           const writeOffDataResponse = await axios.get(`/api/write-offs/${writeOffId}`);
           
-          // Import PDF utility
-          const { generateWriteOffDocumentPdf } = await import('../../util/pdfUtils');
+          // Import PDF utility s lepší podporou češtiny
+          const { generateWriteOffDocumentPdf } = await import('../../util/pdfUtilsAlternative');
           
           // Generování PDF a zobrazení
           const pdf = await generateWriteOffDocumentPdf(writeOffDataResponse.data.write_off);

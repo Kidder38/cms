@@ -472,8 +472,8 @@ const SaleForm = () => {
           // Získání prodeje se všemi daty
           const saleDataResponse = await axios.get(`/api/sales/${saleId}`);
           
-          // Import PDF utility
-          const { generateSaleInvoicePdf } = await import('../../util/pdfUtils');
+          // Import alternativní PDF utility s lepší podporou češtiny
+          const { generateSaleInvoicePdf } = await import('../../util/pdfUtilsAlternative');
           
           // Generování PDF a zobrazení
           const pdf = await generateSaleInvoicePdf(saleDataResponse.data.sale);
