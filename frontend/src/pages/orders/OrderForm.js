@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
+import { Container, Row, Col, Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from '../../axios-config';
+import { useAuth } from '../../context/AuthContext';
 
 const OrderForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditing = !!id;
+  const { user } = useAuth(); // Přidání uživatelského kontextu
   
   const [formData, setFormData] = useState({
     customer_id: '',
@@ -22,7 +24,22 @@ const OrderForm = () => {
   const [error, setError] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   
+  // Ověření, zda je uživatel přihlášen a má oprávnění
   useEffect(() => {
+    if (!user) {
+      setError('Pro přístup k této funkci musíte být přihlášen.');
+      return;
+    }
+    
+    if (!isEditing && user?.role !== 'admin') {
+      setError('Pro vytvoření nové zakázky potřebujete administrátorská práva.');
+      return;
+    }
+  }, [user, isEditing]);
+
+  useEffect(() => {
+    if (!user) return; // Neprovádět načítání, pokud uživatel není přihlášen
+    
     const fetchCustomers = async () => {
       try {
         const response = await axios.get(`/api/customers`);
@@ -107,12 +124,42 @@ const OrderForm = () => {
       }, 1500);
     } catch (error) {
       console.error('Chyba při ukládání zakázky:', error);
-      setError(error.response?.data?.message || 'Chyba při ukládání zakázky. Zkuste to prosím později.');
+      if (error.response?.status === 401) {
+        setError('Pro vytváření zakázek musíte být přihlášen. Přihlášení vypršelo nebo je neplatné.');
+      } else if (error.response?.status === 403) {
+        setError('Pro vytváření zakázek potřebujete administrátorská práva.');
+      } else {
+        setError(error.response?.data?.message || 'Chyba při ukládání zakázky. Zkuste to prosím později.');
+      }
     } finally {
       setLoading(false);
     }
   };
   
+  // Zobrazíme přihlašovací tlačítko, pokud uživatel není přihlášen
+  if (!user) {
+    return (
+      <Container>
+        <Alert variant="danger">
+          <p>Pro přístup k této funkci musíte být přihlášen.</p>
+          <Button as={Link} to="/login" variant="primary" className="mt-2">Přihlásit se</Button>
+        </Alert>
+      </Container>
+    );
+  }
+
+  // Zobrazíme varování o nedostatečných právech
+  if (!isEditing && user?.role !== 'admin') {
+    return (
+      <Container>
+        <Alert variant="warning">
+          <p>Pro vytvoření nové zakázky potřebujete administrátorská práva.</p>
+          <Button as={Link} to="/orders" variant="primary" className="mt-2">Zpět na seznam zakázek</Button>
+        </Alert>
+      </Container>
+    );
+  }
+
   return (
     <Container>
       <h1 className="mb-4">{isEditing ? 'Upravit zakázku' : 'Přidat novou zakázku'}</h1>
