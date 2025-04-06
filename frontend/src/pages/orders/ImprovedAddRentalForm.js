@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert, Table, Tabs, Tab, InputGroup, Badge } from 'react-bootstrap';
 import { FaTrash, FaPlus, FaFileAlt, FaSearch, FaTags, FaListUl, FaShoppingCart } from 'react-icons/fa';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL, formatCurrency, formatDate } from '../../config';
+import axios from '../../axios-config';
+import { formatCurrency, formatDate } from '../../config';
 import { useAuth } from '../../context/AuthContext';
 
 const ImprovedAddRentalForm = ({ initialOrderId, onSuccess }) => {
@@ -85,9 +85,9 @@ const ImprovedAddRentalForm = ({ initialOrderId, onSuccess }) => {
         
         // Načtení zakázky, vybavení a kategorií současně
         const [orderResponse, equipmentResponse, categoriesResponse] = await Promise.all([
-          axios.get(`${API_URL}/orders/${numericOrderId}`),
-          axios.get(`${API_URL}/equipment`),
-          axios.get(`${API_URL}/categories`)
+          axios.get(`/api/orders/${numericOrderId}`),
+          axios.get(`/api/equipment`),
+          axios.get(`/api/categories`)
         ]);
         
         setOrder(orderResponse.data.order);
@@ -418,7 +418,7 @@ const ImprovedAddRentalForm = ({ initialOrderId, onSuccess }) => {
       
       // Postupné ukládání jednotlivých výpůjček
       for (const rental of rentalsToSave) {
-        const response = await axios.post(`${API_URL}/orders/${numericOrderId}/rentals`, rental);
+        const response = await axios.post(`/api/orders/${numericOrderId}/rentals`, rental);
         results.push(response.data);
       }
       
