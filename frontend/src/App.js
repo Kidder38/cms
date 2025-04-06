@@ -55,6 +55,17 @@ import UserDetail from './pages/users/UserDetail';
 import UserForm from './pages/users/UserForm';
 import UserAccessForm from './pages/users/UserAccessForm';
 
+// Komponenty pro prodeje, odpisy a inventury
+import SaleList from './pages/sales/SaleList';
+import SaleDetail from './pages/sales/SaleDetail';
+import SaleForm from './pages/sales/SaleForm';
+import WriteOffList from './pages/write-offs/WriteOffList';
+import WriteOffDetail from './pages/write-offs/WriteOffDetail';
+import WriteOffForm from './pages/write-offs/WriteOffForm';
+import InventoryCheckList from './pages/inventory/InventoryCheckList';
+import InventoryCheckDetail from './pages/inventory/InventoryCheckDetail';
+import InventoryCheckForm from './pages/inventory/InventoryCheckForm';
+
 // Kontext pro autentizaci
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -227,6 +238,24 @@ function AppContent() {
                 <Route path="/users/edit/:id" element={<UserForm />} />
                 <Route path="/users/:id/access" element={<UserAccessForm />} />
                 <Route path="/users/:id" element={<UserDetail />} />
+                
+                {/* Sales routes - správa prodejů */}
+                <Route path="/sales" element={<SaleList />} />
+                <Route path="/sales/new" element={<SaleForm />} />
+                <Route path="/sales/edit/:id" element={<SaleForm />} />
+                <Route path="/sales/:id" element={<SaleDetail />} />
+                
+                {/* Write-offs routes - správa odpisů */}
+                <Route path="/write-offs" element={<WriteOffList />} />
+                <Route path="/write-offs/new" element={<WriteOffForm />} />
+                <Route path="/write-offs/edit/:id" element={<WriteOffForm />} />
+                <Route path="/write-offs/:id" element={<WriteOffDetail />} />
+                
+                {/* Inventory check routes - správa inventur */}
+                <Route path="/inventory-checks" element={<InventoryCheckList />} />
+                <Route path="/inventory-checks/new" element={<InventoryCheckForm />} />
+                <Route path="/inventory-checks/edit/:id" element={<InventoryCheckForm />} />
+                <Route path="/inventory-checks/:id" element={<InventoryCheckDetail />} />
                 
                 {/* Chybějící stránka */}
                 <Route path="*" element={<Navigate to="/" />} />

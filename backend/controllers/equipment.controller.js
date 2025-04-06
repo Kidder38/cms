@@ -70,12 +70,14 @@ exports.getAllEquipment = async (req, res) => {
     });
     console.log("==========================================================");
     
-    // Získání vybavení s kategoriemi a dodavateli
+    // Získání vybavení s kategoriemi, dodavateli a sklady
     const equipmentResult = await db.query(`
-      SELECT e.*, c.name as category_name, s.name as supplier_name, s.contact_person as supplier_contact
+      SELECT e.*, c.name as category_name, s.name as supplier_name, 
+             s.contact_person as supplier_contact, w.name as warehouse_name
       FROM equipment e
       LEFT JOIN equipment_categories c ON e.category_id = c.id
       LEFT JOIN suppliers s ON e.supplier_id = s.id
+      LEFT JOIN warehouses w ON e.warehouse_id = w.id
       ORDER BY e.name ASC
     `);
     
@@ -125,10 +127,12 @@ exports.getEquipmentById = async (req, res) => {
   
   try {
     const result = await db.query(`
-      SELECT e.*, c.name as category_name, s.name as supplier_name, s.contact_person as supplier_contact
+      SELECT e.*, c.name as category_name, s.name as supplier_name, s.contact_person as supplier_contact,
+             w.name as warehouse_name
       FROM equipment e
       LEFT JOIN equipment_categories c ON e.category_id = c.id
       LEFT JOIN suppliers s ON e.supplier_id = s.id
+      LEFT JOIN warehouses w ON e.warehouse_id = w.id
       WHERE e.id = $1
     `, [id]);
     
@@ -200,6 +204,7 @@ exports.createEquipment = async (req, res) => {
     status, 
     location, 
     description,
+    warehouse_id,
     // Nová pole pro externí vybavení
     is_external,
     supplier_id,
@@ -222,6 +227,10 @@ exports.createEquipment = async (req, res) => {
   
   if (!daily_rate) {
     return res.status(400).json({ message: 'Denní sazba je povinná.' });
+  }
+  
+  if (!warehouse_id) {
+    return res.status(400).json({ message: 'Výběr skladu je povinný.' });
   }
   
   try {
@@ -248,37 +257,39 @@ exports.createEquipment = async (req, res) => {
         purchase_price, material_value, daily_rate, monthly_rate, weight_per_piece,
         square_meters_per_piece, total_stock, total_square_meters, status, location, 
         description, photo_url, is_external, supplier_id, external_rental_cost,
-        rental_start_date, rental_end_date, external_reference, return_date, rental_status
+        rental_start_date, rental_end_date, external_reference, return_date, rental_status,
+        warehouse_id
       ) 
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 
-              $18, $19, $20, $21, $22, $23, $24, $25) 
+              $18, $19, $20, $21, $22, $23, $24, $25, $26) 
       RETURNING *
     `, [
       name, 
       category_id, 
       inventory_number, 
-      article_number,
-      product_designation,
-      purchase_price, 
-      material_value,
+      article_number || null,
+      product_designation || null,
+      purchase_price !== '' ? purchase_price : null, 
+      material_value !== '' ? material_value : null,
       daily_rate, 
-      monthly_rate,
-      weight_per_piece,
-      square_meters_per_piece,
-      total_stock,
-      total_square_meters,
+      monthly_rate !== '' ? monthly_rate : null,
+      weight_per_piece !== '' ? weight_per_piece : null,
+      square_meters_per_piece !== '' ? square_meters_per_piece : null,
+      total_stock !== '' ? total_stock : null,
+      total_square_meters !== '' ? total_square_meters : null,
       status || 'available', 
-      location, 
-      description, 
+      location || null, 
+      description || null, 
       photo_url,
       is_external === 'true' || is_external === true,
       supplier_id || null,
-      external_rental_cost || null,
+      external_rental_cost !== '' ? external_rental_cost : null,
       rental_start_date || null,
       rental_end_date || null,
       external_reference || null,
       return_date || null,
-      rental_status || 'active'
+      rental_status || 'active',
+      warehouse_id
     ]);
     
     res.status(201).json({
@@ -329,6 +340,7 @@ exports.updateEquipment = async (req, res) => {
     const status = req.body.status || existingEquipment.status;
     const location = req.body.location || existingEquipment.location;
     const description = req.body.description || existingEquipment.description;
+    const warehouse_id = req.body.warehouse_id || existingEquipment.warehouse_id;
     
     // Nová pole pro externí vybavení
     const is_external = req.body.is_external !== undefined ? 
@@ -389,7 +401,7 @@ exports.updateEquipment = async (req, res) => {
       weight_per_piece, square_meters_per_piece, total_stock, total_square_meters,
       status, location, description, photo_url, is_external, supplier_id,
       external_rental_cost, rental_start_date, rental_end_date, external_reference,
-      return_date, rental_status
+      return_date, rental_status, warehouse_id
     });
     
     const result = await db.query(`
@@ -419,35 +431,37 @@ exports.updateEquipment = async (req, res) => {
         external_reference = $23,
         return_date = $24,
         rental_status = $25,
+        warehouse_id = $26,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $26
+      WHERE id = $27
       RETURNING *
     `, [
       name, 
       category_id, 
       inventory_number, 
-      article_number,
-      product_designation,
-      purchase_price, 
-      material_value,
+      article_number || null,
+      product_designation || null,
+      purchase_price !== '' ? purchase_price : null, 
+      material_value !== '' ? material_value : null,
       daily_rate, 
-      monthly_rate,
-      weight_per_piece,
-      square_meters_per_piece,
-      total_stock,
-      total_square_meters,
+      monthly_rate !== '' ? monthly_rate : null,
+      weight_per_piece !== '' ? weight_per_piece : null,
+      square_meters_per_piece !== '' ? square_meters_per_piece : null,
+      total_stock !== '' ? total_stock : null,
+      total_square_meters !== '' ? total_square_meters : null,
       status, 
-      location, 
-      description, 
+      location || null, 
+      description || null, 
       photo_url,
       is_external,
-      supplier_id,
-      external_rental_cost,
-      rental_start_date,
-      rental_end_date,
-      external_reference,
-      return_date,
+      supplier_id || null,
+      external_rental_cost !== '' ? external_rental_cost : null,
+      rental_start_date || null,
+      rental_end_date || null,
+      external_reference || null,
+      return_date || null,
       rental_status,
+      warehouse_id,
       id
     ]);
     
@@ -502,5 +516,270 @@ exports.deleteEquipment = async (req, res) => {
   } catch (error) {
     console.error('Chyba při mazání vybavení:', error);
     res.status(500).json({ message: 'Chyba serveru při mazání vybavení.' });
+  }
+};
+
+// Přesun vybavení mezi sklady
+exports.transferEquipment = async (req, res) => {
+  const client = await db.getClient();
+  
+  try {
+    await client.query('BEGIN');
+    
+    const { 
+      equipment_id, 
+      quantity, 
+      source_warehouse_id,
+      target_warehouse_id,
+      notes 
+    } = req.body;
+    
+    // Ověření vstupních dat
+    if (!equipment_id || !quantity || !target_warehouse_id) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Chybí povinné údaje. Vyplňte ID vybavení, množství a cílový sklad.' 
+      });
+    }
+    
+    if (quantity <= 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Množství musí být větší než 0.' 
+      });
+    }
+    
+    if (source_warehouse_id === target_warehouse_id) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Zdrojový a cílový sklad musí být rozdílné.' 
+      });
+    }
+    
+    // Zjištění dostupnosti vybavení
+    const equipmentResult = await client.query(
+      `SELECT e.name, e.inventory_number, 
+              COALESCE(e.available_stock, 
+                      (e.total_stock - COALESCE(
+                          (SELECT SUM(r.quantity) 
+                           FROM rentals r 
+                           WHERE r.equipment_id = e.id 
+                             AND r.status IN ('created', 'issued') 
+                             AND r.actual_return_date IS NULL), 0))) as available_stock,
+              e.warehouse_id 
+       FROM equipment e 
+       WHERE e.id = $1`,
+      [equipment_id]
+    );
+    
+    if (equipmentResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Vybavení nebylo nalezeno.' 
+      });
+    }
+    
+    const equipment = equipmentResult.rows[0];
+    
+    // Kontrola, zda je vybavení ve správném zdrojovém skladu
+    if (source_warehouse_id && equipment.warehouse_id !== parseInt(source_warehouse_id)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Vybavení se nenachází v uvedeném zdrojovém skladu.' 
+      });
+    }
+    
+    if (equipment.available_stock < quantity) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        success: false, 
+        message: `Nedostatečné množství na skladě. K dispozici: ${equipment.available_stock} ks.` 
+      });
+    }
+    
+    // Kontrola existence cílového skladu
+    const warehouseResult = await client.query('SELECT name FROM warehouses WHERE id = $1', [target_warehouse_id]);
+    
+    if (warehouseResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Cílový sklad nebyl nalezen.' 
+      });
+    }
+    
+    // Nejprve zkontrolujeme, zda stejné vybavení již existuje v cílovém skladu
+    const existingEquipmentResult = await client.query(
+      `SELECT id, total_stock, available_stock 
+       FROM equipment 
+       WHERE inventory_number = $1 AND warehouse_id = $2`,
+      [equipment.inventory_number, target_warehouse_id]
+    );
+    
+    if (existingEquipmentResult.rows.length > 0) {
+      // Pokud ano, pouze aktualizujeme jeho množství
+      const existingEquipment = existingEquipmentResult.rows[0];
+      
+      // Aktualizace množství vybavení ve zdrojovém skladu
+      await client.query(
+        `UPDATE equipment 
+         SET 
+          total_stock = total_stock - $1,
+          available_stock = available_stock - $1,
+          updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [quantity, equipment_id]
+      );
+      
+      // Aktualizace množství vybavení v cílovém skladu
+      await client.query(
+        `UPDATE equipment 
+         SET 
+          total_stock = total_stock + $1,
+          available_stock = available_stock + $1,
+          updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [quantity, existingEquipment.id]
+      );
+      
+      // Zaznamenání přesunu
+      await client.query(
+        `INSERT INTO equipment_transfers (
+          equipment_id, quantity, source_warehouse_id, target_warehouse_id, 
+          notes, created_by
+        ) VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          equipment_id, 
+          quantity, 
+          equipment.warehouse_id, 
+          target_warehouse_id, 
+          notes || null, 
+          req.userId
+        ]
+      );
+      
+      // Potvrzení transakce
+      await client.query('COMMIT');
+      
+      res.status(200).json({
+        success: true,
+        message: 'Vybavení bylo úspěšně přesunuto.',
+        transfer: {
+          equipment_name: equipment.name,
+          inventory_number: equipment.inventory_number,
+          quantity,
+          source_warehouse: equipment.warehouse_id,
+          target_warehouse: target_warehouse_id
+        }
+      });
+    } else {
+      // Pokud ne, vytvoříme novou položku v cílovém skladu (duplikace záznamu)
+      
+      // Nejprve načteme všechny detaily původního vybavení
+      const fullEquipmentResult = await client.query(
+        'SELECT * FROM equipment WHERE id = $1',
+        [equipment_id]
+      );
+      
+      const fullEquipment = fullEquipmentResult.rows[0];
+      
+      // Aktualizace množství vybavení ve zdrojovém skladu
+      await client.query(
+        `UPDATE equipment 
+         SET 
+          total_stock = total_stock - $1,
+          available_stock = available_stock - $1,
+          updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [quantity, equipment_id]
+      );
+      
+      // Vytvoření nové položky vybavení v cílovém skladu
+      const newEquipmentResult = await client.query(
+        `INSERT INTO equipment (
+          name, category_id, inventory_number, article_number, product_designation,
+          purchase_price, material_value, daily_rate, monthly_rate, weight_per_piece,
+          square_meters_per_piece, total_stock, total_square_meters, status, location, 
+          description, photo_url, is_external, supplier_id, external_rental_cost,
+          rental_start_date, rental_end_date, external_reference, return_date, rental_status,
+          warehouse_id
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 
+          $18, $19, $20, $21, $22, $23, $24, $25, $26
+        ) RETURNING id`,
+        [
+          fullEquipment.name,
+          fullEquipment.category_id,
+          fullEquipment.inventory_number,
+          fullEquipment.article_number,
+          fullEquipment.product_designation,
+          fullEquipment.purchase_price,
+          fullEquipment.material_value,
+          fullEquipment.daily_rate,
+          fullEquipment.monthly_rate,
+          fullEquipment.weight_per_piece,
+          fullEquipment.square_meters_per_piece,
+          quantity,  // Nové množství
+          fullEquipment.total_square_meters,
+          fullEquipment.status,
+          fullEquipment.location,
+          fullEquipment.description,
+          fullEquipment.photo_url,
+          fullEquipment.is_external,
+          fullEquipment.supplier_id,
+          fullEquipment.external_rental_cost,
+          fullEquipment.rental_start_date,
+          fullEquipment.rental_end_date,
+          fullEquipment.external_reference,
+          fullEquipment.return_date,
+          fullEquipment.rental_status,
+          target_warehouse_id
+        ]
+      );
+      
+      // Zaznamenání přesunu
+      await client.query(
+        `INSERT INTO equipment_transfers (
+          equipment_id, quantity, source_warehouse_id, target_warehouse_id, 
+          target_equipment_id, notes, created_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          equipment_id, 
+          quantity, 
+          equipment.warehouse_id, 
+          target_warehouse_id, 
+          newEquipmentResult.rows[0].id,
+          notes || null, 
+          req.userId
+        ]
+      );
+      
+      // Potvrzení transakce
+      await client.query('COMMIT');
+      
+      res.status(200).json({
+        success: true,
+        message: 'Vybavení bylo úspěšně přesunuto a vytvořeno v cílovém skladu.',
+        transfer: {
+          equipment_name: equipment.name,
+          inventory_number: equipment.inventory_number,
+          quantity,
+          source_warehouse: equipment.warehouse_id,
+          target_warehouse: target_warehouse_id,
+          new_equipment_id: newEquipmentResult.rows[0].id
+        }
+      });
+    }
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Chyba při přesunu vybavení:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Při přesunu vybavení došlo k chybě: ' + error.message 
+    });
+  } finally {
+    client.release();
   }
 };

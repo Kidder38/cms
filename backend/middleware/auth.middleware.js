@@ -18,6 +18,7 @@ const verifyToken = (req, res, next) => {
     
     // Přidání informací o uživateli do požadavku
     req.user = decoded;
+    req.userId = decoded.id; // Explicitně přidáme userId pro přístup v kontrolerech
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Neplatný token.' });

@@ -5,10 +5,15 @@ const { verifyToken, isAdmin } = require('../middleware/auth.middleware');
 
 // Routy pro přístup k vybavení (jen pro administrátory)
 router.get('/', verifyToken, isAdmin, equipmentController.getAllEquipment);
-router.get('/:id', verifyToken, isAdmin, equipmentController.getEquipmentById);
 
 // Chráněné routy (jen pro administrátory)
 router.post('/', verifyToken, isAdmin, equipmentController.uploadPhoto, equipmentController.createEquipment);
+
+// Specifické routy musí být před parametrizovanými routami
+router.post('/transfer', verifyToken, isAdmin, equipmentController.transferEquipment);
+
+// Routy s parametry musí být až na konci
+router.get('/:id', verifyToken, isAdmin, equipmentController.getEquipmentById);
 router.put('/:id', verifyToken, isAdmin, equipmentController.uploadPhoto, equipmentController.updateEquipment);
 router.delete('/:id', verifyToken, isAdmin, equipmentController.deleteEquipment);
 

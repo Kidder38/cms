@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
+import { Container, Row, Col, Card, Form, Button, Alert, Spinner, InputGroup } from 'react-bootstrap';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from '../../axios-config';
 import { useAuth } from '../../context/AuthContext';
@@ -18,6 +18,7 @@ const EquipmentForm = () => {
   }, [user, navigate]);
 
   const [categories, setCategories] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
     category_id: '',
@@ -34,7 +35,8 @@ const EquipmentForm = () => {
     total_square_meters: '',
     status: 'available',
     location: '',
-    description: ''
+    description: '',
+    warehouse_id: ''
   });
   const [photo, setPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -42,20 +44,30 @@ const EquipmentForm = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
-  // Načtení kategorií
+  // Načtení kategorií a skladů
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchData = async () => {
       try {
-        const response = await axios.get(`/api/categories`);
-        setCategories(response.data.categories);
+        const [categoriesResponse, warehousesResponse] = await Promise.all([
+          axios.get(`/api/categories`),
+          axios.get(`/api/warehouses`)
+        ]);
+        
+        setCategories(categoriesResponse.data.categories);
+        setWarehouses(warehousesResponse.data.warehouses);
+        
+        // Pokud zakládáme nové vybavení, vygenerujeme inventární číslo
+        if (!isEditing) {
+          generateInventoryNumber();
+        }
       } catch (error) {
-        console.error('Chyba při načítání kategorií:', error);
-        setError('Nepodařilo se načíst kategorie. Zkuste to prosím později.');
+        console.error('Chyba při načítání dat:', error);
+        setError('Nepodařilo se načíst potřebná data. Zkuste to prosím později.');
       }
     };
 
-    fetchCategories();
-  }, []);
+    fetchData();
+  }, [isEditing]);
 
   // Načtení dat při editaci
   useEffect(() => {
@@ -82,7 +94,8 @@ const EquipmentForm = () => {
             total_square_meters: equipmentData.total_square_meters || '',
             status: equipmentData.status || 'available',
             location: equipmentData.location || '',
-            description: equipmentData.description || ''
+            description: equipmentData.description || '',
+            warehouse_id: equipmentData.warehouse_id || ''
           });
 
           if (equipmentData.photo_url) {
@@ -99,6 +112,28 @@ const EquipmentForm = () => {
       fetchEquipment();
     }
   }, [id, isEditing]);
+
+  // Generování unikátního ID pro inventární číslo
+  const generateInventoryNumber = () => {
+    try {
+      // Vytvoříme aktuální timestamp
+      const timestamp = Date.now();
+      
+      // Vygenerujeme náhodnou část (4 znaky)
+      const randomPart = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+      
+      // Vytvoříme finální unikátní ID ve formátu TS-RAND (timestamp-random)
+      const uniqueId = `${timestamp}-${randomPart}`;
+      
+      // Aktualizujeme stav formuláře
+      setFormData(prev => ({ ...prev, inventory_number: uniqueId }));
+    } catch (error) {
+      console.error('Chyba při generování unikátního ID:', error);
+      // Pokud se nepodaří vygenerovat, vytvoříme jednoduchý časový otisk
+      const fallbackId = `ID-${Date.now()}`;
+      setFormData(prev => ({ ...prev, inventory_number: fallbackId }));
+    }
+  };
 
   // Změna hodnot v formuláři
   const handleChange = (e) => {
@@ -241,16 +276,33 @@ const EquipmentForm = () => {
             <Row>
               <Col md={4}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Inventární číslo *</Form.Label>
-                  <Form.Control
-                    type="text"
-                    name="inventory_number"
-                    value={formData.inventory_number}
-                    onChange={handleChange}
-                    required
-                    disabled={loading}
-                    placeholder="Zadejte inventární číslo"
-                  />
+                  <Form.Label>Inventární číslo * {!isEditing && <span className="text-muted">(automaticky)</span>}</Form.Label>
+                  <InputGroup>
+                    <Form.Control
+                      type="text"
+                      name="inventory_number"
+                      value={formData.inventory_number}
+                      onChange={handleChange}
+                      required
+                      disabled={loading}
+                      placeholder="Automaticky generováno jako unikátní ID"
+                    />
+                    {!isEditing && (
+                      <Button 
+                        variant="outline-secondary" 
+                        onClick={generateInventoryNumber}
+                        disabled={loading}
+                        title="Vygenerovat nové inventární číslo"
+                      >
+                        ↻
+                      </Button>
+                    )}
+                  </InputGroup>
+                  {!isEditing && (
+                    <Form.Text className="text-muted">
+                      Inventární číslo je automaticky generováno jako unikátní ID
+                    </Form.Text>
+                  )}
                 </Form.Group>
               </Col>
               <Col md={4}>
@@ -360,15 +412,21 @@ const EquipmentForm = () => {
               </Col>
               <Col md={4}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Umístění</Form.Label>
-                  <Form.Control
-                    type="text"
-                    name="location"
-                    value={formData.location}
+                  <Form.Label>Sklad *</Form.Label>
+                  <Form.Select
+                    name="warehouse_id"
+                    value={formData.warehouse_id}
                     onChange={handleChange}
+                    required
                     disabled={loading}
-                    placeholder="Zadejte umístění"
-                  />
+                  >
+                    <option value="">Vyberte sklad</option>
+                    {warehouses?.map(warehouse => (
+                      <option key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name}
+                      </option>
+                    ))}
+                  </Form.Select>
                 </Form.Group>
               </Col>
             </Row>
@@ -433,7 +491,20 @@ const EquipmentForm = () => {
             </Row>
 
             <Row>
-              <Col md={12}>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Umístění</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleChange}
+                    disabled={loading}
+                    placeholder="Zadejte umístění ve skladu"
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
                 <Form.Group className="mb-3">
                   <Form.Label>Popis</Form.Label>
                   <Form.Control

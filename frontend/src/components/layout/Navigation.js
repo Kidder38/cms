@@ -62,6 +62,10 @@ const Navigation = () => {
                   <NavDropdown.Item as={Link} to="/warehouses">Přehled skladů</NavDropdown.Item>
                   <NavDropdown.Item as={Link} to="/equipment">Vybavení</NavDropdown.Item>
                   <NavDropdown.Item as={Link} to="/suppliers">Dodavatelé</NavDropdown.Item>
+                  <NavDropdown.Divider />
+                  <NavDropdown.Item as={Link} to="/sales">Prodeje</NavDropdown.Item>
+                  <NavDropdown.Item as={Link} to="/write-offs">Odpisy</NavDropdown.Item>
+                  <NavDropdown.Item as={Link} to="/inventory-checks">Inventury</NavDropdown.Item>
                   {user?.role === 'admin' && (
                     <>
                       <NavDropdown.Divider />

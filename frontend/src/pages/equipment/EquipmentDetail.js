@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Badge, ListGroup, Alert } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Badge, ListGroup, Alert, Modal, Form } from 'react-bootstrap';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL, formatCurrency, formatDate, EQUIPMENT_STATUS } from '../../config';
+import axios from '../../axios-config';
+import { formatCurrency, formatDate, EQUIPMENT_STATUS } from '../../config';
 import { useAuth } from '../../context/AuthContext';
+import { FaTrash, FaExchangeAlt, FaArrowAltCircleDown, FaBarcode, FaTimesCircle } from 'react-icons/fa';
 
 const EquipmentDetail = () => {
   const { id } = useParams();
@@ -13,11 +14,45 @@ const EquipmentDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  // Modální okna pro různé akce
+  const [showSellModal, setShowSellModal] = useState(false);
+  const [showWriteOffModal, setShowWriteOffModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  
+  // Formulářové údaje pro různé akce
+  const [sellForm, setSellForm] = useState({
+    quantity: 1,
+    unit_price: '',
+    customer_id: '',
+    invoice_number: '',
+    notes: ''
+  });
+  
+  const [writeOffForm, setWriteOffForm] = useState({
+    quantity: 1,
+    reason: 'damaged',
+    notes: ''
+  });
+  
+  const [transferForm, setTransferForm] = useState({
+    quantity: 1,
+    target_warehouse_id: '',
+    notes: ''
+  });
+  
+  const [warehouses, setWarehouses] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  
   useEffect(() => {
     const fetchEquipment = async () => {
       try {
-        const response = await axios.get(`${API_URL}/equipment/${id}`);
+        const response = await axios.get(`/api/equipment/${id}`);
         setEquipment(response.data.equipment);
+        // Předvyplnit cenu prodeje podle denní sazby nebo pořizovací ceny
+        setSellForm(prev => ({
+          ...prev,
+          unit_price: response.data.equipment.daily_rate || response.data.equipment.purchase_price || ''
+        }));
         setLoading(false);
       } catch (error) {
         console.error('Chyba při načítání dat:', error);
@@ -26,7 +61,21 @@ const EquipmentDetail = () => {
       }
     };
     
+    const fetchRelatedData = async () => {
+      try {
+        const [warehousesRes, customersRes] = await Promise.all([
+          axios.get('/api/warehouses'),
+          axios.get('/api/customers')
+        ]);
+        setWarehouses(warehousesRes.data.warehouses);
+        setCustomers(customersRes.data.customers);
+      } catch (error) {
+        console.error('Chyba při načítání dat:', error);
+      }
+    };
+    
     fetchEquipment();
+    fetchRelatedData();
   }, [id]);
   
   const handleDelete = async () => {
@@ -35,12 +84,119 @@ const EquipmentDetail = () => {
     }
     
     try {
-      await axios.delete(`${API_URL}/equipment/${id}`);
+      await axios.delete(`/api/equipment/${id}`);
       alert('Vybavení bylo úspěšně smazáno.');
       navigate('/equipment');
     } catch (error) {
       console.error('Chyba při mazání vybavení:', error);
       alert(error.response?.data?.message || 'Chyba při mazání vybavení.');
+    }
+  };
+  
+  // Funkce pro manipulaci s formulářem prodeje
+  const handleSellChange = (e) => {
+    const { name, value } = e.target;
+    setSellForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  // Funkce pro manipulaci s formulářem odpisu
+  const handleWriteOffChange = (e) => {
+    const { name, value } = e.target;
+    setWriteOffForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  // Funkce pro manipulaci s formulářem přesunu
+  const handleTransferChange = (e) => {
+    const { name, value } = e.target;
+    setTransferForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  // Odeslání formuláře prodeje
+  const handleSellSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      await axios.post('/api/sales', {
+        equipment_id: id,
+        quantity: sellForm.quantity,
+        unit_price: sellForm.unit_price,
+        customer_id: sellForm.customer_id || null,
+        invoice_number: sellForm.invoice_number || null,
+        notes: sellForm.notes || null
+      });
+      
+      // Aktualizovat data vybavení
+      const response = await axios.get(`/api/equipment/${id}`);
+      setEquipment(response.data.equipment);
+      setShowSellModal(false);
+      alert('Prodej byl úspěšně zaznamenán.');
+    } catch (error) {
+      console.error('Chyba při zaznamenávání prodeje:', error);
+      alert(error.response?.data?.message || 'Chyba při zaznamenávání prodeje.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Odeslání formuláře odpisu
+  const handleWriteOffSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      await axios.post('/api/write-offs', {
+        equipment_id: id,
+        quantity: writeOffForm.quantity,
+        reason: writeOffForm.reason,
+        notes: writeOffForm.notes || null
+      });
+      
+      // Aktualizovat data vybavení
+      const response = await axios.get(`/api/equipment/${id}`);
+      setEquipment(response.data.equipment);
+      setShowWriteOffModal(false);
+      alert('Odpis byl úspěšně zaznamenán.');
+    } catch (error) {
+      console.error('Chyba při zaznamenávání odpisu:', error);
+      alert(error.response?.data?.message || 'Chyba při zaznamenávání odpisu.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Odeslání formuláře přesunu
+  const handleTransferSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      await axios.post('/api/equipment/transfer', {
+        equipment_id: id,
+        quantity: transferForm.quantity,
+        target_warehouse_id: transferForm.target_warehouse_id,
+        notes: transferForm.notes || null
+      });
+      
+      // Aktualizovat data vybavení
+      const response = await axios.get(`/api/equipment/${id}`);
+      setEquipment(response.data.equipment);
+      setShowTransferModal(false);
+      alert('Přesun byl úspěšně zaznamenán.');
+    } catch (error) {
+      console.error('Chyba při zaznamenávání přesunu:', error);
+      alert(error.response?.data?.message || 'Chyba při zaznamenávání přesunu.');
+    } finally {
+      setLoading(false);
     }
   };
   
@@ -98,8 +254,35 @@ const EquipmentDetail = () => {
               <Button 
                 variant="danger" 
                 onClick={handleDelete}
+                className="me-2"
               >
                 Smazat
+              </Button>
+              
+              <Button 
+                variant="outline-primary"
+                onClick={() => setShowTransferModal(true)}
+                className="me-2"
+                title="Přesunout do jiného skladu"
+              >
+                <FaExchangeAlt /> Přesunout
+              </Button>
+              
+              <Button 
+                variant="outline-success"
+                onClick={() => setShowSellModal(true)}
+                className="me-2"
+                title="Prodat"
+              >
+                <FaArrowAltCircleDown /> Prodat
+              </Button>
+              
+              <Button 
+                variant="outline-danger"
+                onClick={() => setShowWriteOffModal(true)}
+                title="Odepsat"
+              >
+                <FaTimesCircle /> Odepsat
               </Button>
             </>
           )}
@@ -135,7 +318,10 @@ const EquipmentDetail = () => {
                 </Badge>
               </ListGroup.Item>
               <ListGroup.Item>
-                <strong>Umístění:</strong> {equipment.location || 'Neuvedeno'}
+                <strong>Sklad:</strong> {equipment.warehouse_name || 'Neurčen'}
+              </ListGroup.Item>
+              <ListGroup.Item>
+                <strong>Umístění ve skladu:</strong> {equipment.location || 'Neuvedeno'}
               </ListGroup.Item>
             </ListGroup>
           </Card>
@@ -177,6 +363,14 @@ const EquipmentDetail = () => {
                 <strong>Sklad celkem:</strong> {equipment.total_stock || 'Neuvedeno'}
               </ListGroup.Item>
               <ListGroup.Item>
+                <strong>Dostupné množství:</strong> {equipment.available_stock || 'Neuvedeno'}
+                {equipment.rented_quantity > 0 && (
+                  <span className="ms-2">
+                    <Badge bg="warning">{equipment.rented_quantity} ks vypůjčeno</Badge>
+                  </span>
+                )}
+              </ListGroup.Item>
+              <ListGroup.Item>
                 <strong>m2/celkem:</strong> {equipment.total_square_meters || 'Neuvedeno'}
               </ListGroup.Item>
               <ListGroup.Item>
@@ -216,6 +410,218 @@ const EquipmentDetail = () => {
           </Card>
         </Col>
       </Row>
+      
+      {/* Modální okno pro prodej */}
+      <Modal show={showSellModal} onHide={() => setShowSellModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Prodej zboží</Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleSellSubmit}>
+          <Modal.Body>
+            <Form.Group className="mb-3">
+              <Form.Label>Množství</Form.Label>
+              <Form.Control
+                type="number"
+                name="quantity"
+                value={sellForm.quantity}
+                onChange={handleSellChange}
+                min="1"
+                max={equipment.available_stock}
+                required
+              />
+              <Form.Text className="text-muted">
+                Dostupné množství: {equipment.available_stock} ks
+              </Form.Text>
+            </Form.Group>
+            
+            <Form.Group className="mb-3">
+              <Form.Label>Cena za jednotku</Form.Label>
+              <Form.Control
+                type="number"
+                step="0.01"
+                name="unit_price"
+                value={sellForm.unit_price}
+                onChange={handleSellChange}
+                required
+              />
+            </Form.Group>
+            
+            <Form.Group className="mb-3">
+              <Form.Label>Zákazník</Form.Label>
+              <Form.Select
+                name="customer_id"
+                value={sellForm.customer_id}
+                onChange={handleSellChange}
+              >
+                <option value="">Vyberte zákazníka (nepovinné)</option>
+                {customers.map(customer => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+            
+            <Form.Group className="mb-3">
+              <Form.Label>Číslo faktury</Form.Label>
+              <Form.Control
+                type="text"
+                name="invoice_number"
+                value={sellForm.invoice_number}
+                onChange={handleSellChange}
+                placeholder="Zadejte číslo faktury (nepovinné)"
+              />
+            </Form.Group>
+            
+            <Form.Group className="mb-3">
+              <Form.Label>Poznámky</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                name="notes"
+                value={sellForm.notes}
+                onChange={handleSellChange}
+                placeholder="Zadejte poznámky k prodeji (nepovinné)"
+              />
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowSellModal(false)}>
+              Zrušit
+            </Button>
+            <Button variant="success" type="submit" disabled={loading}>
+              {loading ? 'Zpracování...' : 'Potvrdit prodej'}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+      
+      {/* Modální okno pro odpis */}
+      <Modal show={showWriteOffModal} onHide={() => setShowWriteOffModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Odpis zboží</Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleWriteOffSubmit}>
+          <Modal.Body>
+            <Form.Group className="mb-3">
+              <Form.Label>Množství</Form.Label>
+              <Form.Control
+                type="number"
+                name="quantity"
+                value={writeOffForm.quantity}
+                onChange={handleWriteOffChange}
+                min="1"
+                max={equipment.available_stock}
+                required
+              />
+              <Form.Text className="text-muted">
+                Dostupné množství: {equipment.available_stock} ks
+              </Form.Text>
+            </Form.Group>
+            
+            <Form.Group className="mb-3">
+              <Form.Label>Důvod odpisu</Form.Label>
+              <Form.Select
+                name="reason"
+                value={writeOffForm.reason}
+                onChange={handleWriteOffChange}
+                required
+              >
+                <option value="damaged">Poškozeno</option>
+                <option value="lost">Ztraceno</option>
+                <option value="expired">Prošlá životnost</option>
+                <option value="other">Jiný důvod</option>
+              </Form.Select>
+            </Form.Group>
+            
+            <Form.Group className="mb-3">
+              <Form.Label>Poznámky</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                name="notes"
+                value={writeOffForm.notes}
+                onChange={handleWriteOffChange}
+                placeholder="Zadejte detaily důvodu odpisu"
+              />
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowWriteOffModal(false)}>
+              Zrušit
+            </Button>
+            <Button variant="danger" type="submit" disabled={loading}>
+              {loading ? 'Zpracování...' : 'Potvrdit odpis'}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+      
+      {/* Modální okno pro přesun do jiného skladu */}
+      <Modal show={showTransferModal} onHide={() => setShowTransferModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Přesun zboží do jiného skladu</Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleTransferSubmit}>
+          <Modal.Body>
+            <Form.Group className="mb-3">
+              <Form.Label>Množství</Form.Label>
+              <Form.Control
+                type="number"
+                name="quantity"
+                value={transferForm.quantity}
+                onChange={handleTransferChange}
+                min="1"
+                max={equipment.available_stock}
+                required
+              />
+              <Form.Text className="text-muted">
+                Dostupné množství: {equipment.available_stock} ks
+              </Form.Text>
+            </Form.Group>
+            
+            <Form.Group className="mb-3">
+              <Form.Label>Cílový sklad</Form.Label>
+              <Form.Select
+                name="target_warehouse_id"
+                value={transferForm.target_warehouse_id}
+                onChange={handleTransferChange}
+                required
+              >
+                <option value="">Vyberte cílový sklad</option>
+                {warehouses
+                  .filter(w => w.id !== equipment.warehouse_id)
+                  .map(warehouse => (
+                    <option key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
+                    </option>
+                  ))
+                }
+              </Form.Select>
+            </Form.Group>
+            
+            <Form.Group className="mb-3">
+              <Form.Label>Poznámky</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                name="notes"
+                value={transferForm.notes}
+                onChange={handleTransferChange}
+                placeholder="Zadejte poznámky k přesunu (nepovinné)"
+              />
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowTransferModal(false)}>
+              Zrušit
+            </Button>
+            <Button variant="primary" type="submit" disabled={loading}>
+              {loading ? 'Zpracování...' : 'Potvrdit přesun'}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
     </Container>
   );
 };
