@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Button, Card, Alert, Spinner, Row, Col } from 'react-bootstrap';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
+import axios from '../../axios-config';
 import { API_URL } from '../../config';
 import { useAuth } from '../../context/AuthContext';
 
@@ -33,7 +33,7 @@ const UserForm = () => {
       const fetchUser = async () => {
         try {
           setLoading(true);
-          const response = await axios.get(`${API_URL}/api/users/${id}`);
+          const response = await axios.get(`/api/users/${id}`);
           const userData = response.data.user;
           
           setFormData({
@@ -115,18 +115,18 @@ const UserForm = () => {
       
       if (isEditMode) {
         // Editace existujícího uživatele
-        await axios.put(`${API_URL}/api/users/${id}`, userData);
+        await axios.put(`/api/users/${id}`, userData);
         
         // Pokud bylo změněno heslo, odesláme samostatný požadavek na změnu hesla
         if (passwordChanged && formData.password && formData.currentPassword) {
-          await axios.post(`${API_URL}/api/users/${id}/change-password`, {
+          await axios.post(`/api/users/${id}/change-password`, {
             currentPassword: formData.currentPassword,
             newPassword: formData.password
           });
         }
       } else {
         // Vytvoření nového uživatele
-        await axios.post(`${API_URL}/api/users`, userData);
+        await axios.post(`/api/users`, userData);
       }
       
       // Přesměrování na seznam uživatelů
