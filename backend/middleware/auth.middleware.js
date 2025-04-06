@@ -2,26 +2,67 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/db.config');
 require('dotenv').config();
 
-// Middleware pro ověření JWT tokenu
+// Middleware pro ověření JWT tokenu - vylepšený pro širokou kompatibilitu
 const verifyToken = (req, res, next) => {
-  // Získání tokenu z hlavičky Authorization
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  // Log všech hlaviček pro snazší debugging
+  console.log('Přijaté hlavičky requestu:', req.headers);
   
+  // Token získáme z několika možných zdrojů v pořadí preference
+  let token = null;
+
+  // 1. Zkusíme získat z hlavičky Authorization (Bearer token)
+  const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+    console.log('Token nalezen v Authorization hlavičce');
+  }
+  
+  // 2. Pokud není nalezen v Authorization hlavičce, zkusíme z cookie
+  if (!token && req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+    console.log('Token nalezen v cookies');
+  }
+  
+  // 3. Zkusíme získat z query parametru token (méně bezpečné, pro testy)
+  if (!token && req.query && req.query.token) {
+    token = req.query.token;
+    console.log('Token nalezen v query parametru (POUZE PRO VÝVOJ)');
+  }
+  
+  // 4. Pokud jsme nenašli token nikde, zkusíme ještě x-access-token hlavičku
+  if (!token && req.headers['x-access-token']) {
+    token = req.headers['x-access-token'];
+    console.log('Token nalezen v x-access-token hlavičce');
+  }
+  
+  // Pokud token nebyl nalezen v žádném zdroji, vrátíme 401
   if (!token) {
-    return res.status(401).json({ message: 'Přístup odmítnut. Token nebyl poskytnut.' });
+    console.log('Token nebyl nalezen v žádném zdroji');
+    return res.status(401).json({ 
+      message: 'Přístup odmítnut. Token nebyl poskytnut.',
+      debug: {
+        headers: Object.keys(req.headers),
+        hasAuthHeader: !!authHeader,
+        hasCookies: !!req.cookies,
+        path: req.path,
+        method: req.method
+      }
+    });
   }
   
   try {
     // Ověření platnosti tokenu
+    console.log('Ověřuji token...');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('Token je platný, přihlášený uživatel:', decoded.username);
     
     // Přidání informací o uživateli do požadavku
     req.user = decoded;
     req.userId = decoded.id; // Explicitně přidáme userId pro přístup v kontrolerech
     next();
   } catch (error) {
-    return res.status(401).json({ message: 'Neplatný token.' });
+    console.error('Chyba při ověřování tokenu:', error);
+    return res.status(401).json({ message: 'Neplatný token.', error: error.message });
   }
 };
 

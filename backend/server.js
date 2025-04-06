@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const path = require('path');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 const { testConnection } = require('./config/db.config');
 
 // Načtení proměnných z .env souboru
@@ -25,6 +26,7 @@ app.use(helmet({
 // Limity pro velikost requestů
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+app.use(cookieParser()); // Zpracování cookies v požadavcích
 
 // CORS nastavení
 let corsOrigin;
@@ -40,9 +42,17 @@ if (process.env.NODE_ENV === 'production') {
 
 const corsOptions = {
   origin: corsOrigin,
-  credentials: true,
+  credentials: true, // Povolí přenos cookies
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Access-Token',
+    'X-Requested-With',
+    'Origin',
+    'Accept'
+  ],
+  exposedHeaders: ['Authorization'] // Umožní frontendovému kódu číst tuto hlavičku
 };
 
 app.use(cors(corsOptions));
@@ -99,6 +109,24 @@ app.get('/api/version', (req, res) => {
   res.status(200).json({
     version: API_VERSION,
     buildDate: process.env.BUILD_DATE || new Date().toISOString()
+  });
+});
+
+// DEBUG: Endpoint pro testování autentizace (pomůže najít problém s tokeny)
+app.get('/api/debug/auth', (req, res) => {
+  const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+  const cookies = req.cookies || {};
+  
+  res.status(200).json({
+    headers: {
+      authorization: authHeader,
+      allHeaders: Object.keys(req.headers),
+    },
+    cookies: {
+      token: cookies.token,
+      allCookies: Object.keys(cookies),
+    },
+    time: new Date().toISOString()
   });
 });
 

@@ -32,8 +32,21 @@ exports.register = async (req, res) => {
     const token = jwt.sign(
       { id: newUser.rows[0].id, username, role: newUser.rows[0].role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRE }
+      { expiresIn: process.env.JWT_EXPIRE || '24h' }
     );
+    
+    // Nastav token jako cookie pro lepší persistenci mezi požadavky
+    res.cookie('token', token, {
+      httpOnly: true, // Cookie není přístupná přes JavaScript (bezpečnější)
+      secure: process.env.NODE_ENV === 'production', // HTTPS pouze v produkci
+      sameSite: 'lax', // Ochrana proti CSRF
+      maxAge: 24 * 60 * 60 * 1000 // 24 hodin
+    });
+    
+    // Přidej token do hlavičky pro kompatibilitu s frontendovou implementací
+    res.setHeader('Authorization', `Bearer ${token}`);
+    
+    console.log('Registrace úspěšná, token generován:', token.substring(0, 20) + '...');
     
     res.status(201).json({
       message: 'Uživatel byl úspěšně registrován',
@@ -79,8 +92,22 @@ exports.login = async (req, res) => {
     const token = jwt.sign(
       { id: user.id, username: user.username, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRE }
+      { expiresIn: process.env.JWT_EXPIRE || '24h' }
     );
+    
+    // Nastav token jako cookie pro lepší persistenci mezi požadavky
+    // Tato cookie bude automaticky odeslána s každým požadavkem na server
+    res.cookie('token', token, {
+      httpOnly: true, // Cookie není přístupná přes JavaScript (bezpečnější)
+      secure: process.env.NODE_ENV === 'production', // HTTPS pouze v produkci
+      sameSite: 'lax', // Ochrana proti CSRF
+      maxAge: 24 * 60 * 60 * 1000 // 24 hodin
+    });
+    
+    // Přidej token do hlavičky pro kompatibilitu s frontendovou implementací
+    res.setHeader('Authorization', `Bearer ${token}`);
+    
+    console.log('Přihlášení úspěšné, token generován:', token.substring(0, 20) + '...');
     
     res.status(200).json({
       message: 'Přihlášení úspěšné',
