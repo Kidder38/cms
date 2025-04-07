@@ -101,15 +101,23 @@ function AppContent() {
   // Explicitně nastavit token při každém renderování App
   useEffect(() => {
     if (token) {
-      // Zajistíme, že axios má vždy nastavený token v hlavičkách
-      const axios = require('axios');
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      // Nastavíme token také pro náš konfigurovaný axios
-      const configuredAxios = require('./axios-config').default;
-      configuredAxios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      console.log('Token byl nastaven v App.js pro všechny axios instance');
+      try {
+        // Zajistíme, že axios má vždy nastavený token v hlavičkách
+        const axios = require('axios');
+        if (axios && axios.defaults) {
+          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        }
+        
+        // Nastavíme token také pro náš konfigurovaný axios
+        const configuredAxios = require('./axios-config').default;
+        if (configuredAxios && configuredAxios.defaults) {
+          configuredAxios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        }
+        
+        console.log('Token byl nastaven v App.js pro všechny axios instance');
+      } catch (error) {
+        console.error('Chyba při nastavování tokenu v hlavičkách:', error);
+      }
     }
   }, [token]);
   

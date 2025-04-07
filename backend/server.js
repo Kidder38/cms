@@ -17,11 +17,40 @@ const PORT = process.env.PORT || 5000;
 // Pro Heroku, CloudFront atd. - korektní získání IP klienta
 app.set('trust proxy', 1);
 
-// Bezpečnostní hlavičky
-app.use(helmet({
-  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
-  crossOriginEmbedderPolicy: false // Potřebné pro nahrávání souborů
-}));
+// V produkčním prostředí dočasně vypneme helmet pro snadnější ladění
+if (process.env.NODE_ENV === 'production') {
+  app.use(helmet.contentSecurityPolicy({
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      fontSrc: ["'self'", 'data:'],
+      imgSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'"]
+    }
+  }));
+  // Pro ostatní helmet moduly použijeme jen ty nejdůležitější
+  app.use(helmet.dnsPrefetchControl());
+  app.use(helmet.frameguard());
+  app.use(helmet.hidePoweredBy());
+  app.use(helmet.hsts());
+  app.use(helmet.ieNoOpen());
+  app.use(helmet.noSniff({
+    setFor: {
+      'text/javascript': false,
+      'application/javascript': false,
+      'text/css': false
+    }
+  }));
+  app.use(helmet.permittedCrossDomainPolicies());
+  app.use(helmet.referrerPolicy());
+} else {
+  // Ve vývojovém prostředí povolíme všechny helmet funkce
+  app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false
+  }));
+}
 
 // Limity pro velikost requestů
 app.use(express.json({ limit: '2mb' }));
@@ -174,10 +203,48 @@ app.use((err, req, res, next) => {
 
 // Konfigurace pro produkci - servírování frontendu
 if (process.env.NODE_ENV === 'production') {
+  // Vyhněme se Helmet blokování MIME typů pro kritické soubory
+  app.use('/static/js', (req, res, next) => {
+    res.type('application/javascript');
+    next();
+  });
+  
+  app.use('/static/css', (req, res, next) => {
+    res.type('text/css');
+    next();
+  });
+  
+  app.use('/manifest.json', (req, res, next) => {
+    res.type('application/json');
+    next();
+  });
+
+  // Statické soubory z React buildu s explicitním nastavením MIME typů
+  const staticOptions = {
+    maxAge: 86400000, // 1 den cache
+    index: false, // Zakázat automatické servírování index.html
+    setHeaders: (res, filePath) => {
+      // Nastavíme MIME typy explicitně podle přípony souboru
+      if (filePath.endsWith('.js')) {
+        res.set('Content-Type', 'application/javascript');
+      } else if (filePath.endsWith('.css')) {
+        res.set('Content-Type', 'text/css');
+      } else if (filePath.endsWith('.json')) {
+        res.set('Content-Type', 'application/json');
+      } else if (filePath.endsWith('.png')) {
+        res.set('Content-Type', 'image/png');
+      } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+        res.set('Content-Type', 'image/jpeg');
+      } else if (filePath.endsWith('.svg')) {
+        res.set('Content-Type', 'image/svg+xml');
+      }
+      // Povolit přesměrování
+      res.set('X-Content-Type-Options', 'nosniff');
+    }
+  };
+  
   // Statické soubory z React buildu
-  app.use(express.static(path.join(__dirname, '../frontend/build'), {
-    maxAge: 86400000 // 1 den cache
-  }));
+  app.use(express.static(path.join(__dirname, '../frontend/build'), staticOptions));
   
   // Všechny ostatní požadavky směrujeme na React app
   app.get('*', (req, res) => {
