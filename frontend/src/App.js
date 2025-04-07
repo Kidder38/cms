@@ -102,19 +102,27 @@ function AppContent() {
   useEffect(() => {
     if (token) {
       try {
-        // Zajistíme, že axios má vždy nastavený token v hlavičkách
-        const axios = require('axios');
-        if (axios && axios.defaults) {
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        }
+        // Import axios a nastavení hlavičky - použijeme import namísto require
+        import('axios').then(axiosModule => {
+          const axios = axiosModule.default;
+          if (axios && axios.defaults && axios.defaults.headers) {
+            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            console.log('Token byl nastaven pro globální axios');
+          }
+        }).catch(err => {
+          console.error('Chyba při importu axios:', err);
+        });
         
-        // Nastavíme token také pro náš konfigurovaný axios
-        const configuredAxios = require('./axios-config').default;
-        if (configuredAxios && configuredAxios.defaults) {
-          configuredAxios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        }
-        
-        console.log('Token byl nastaven v App.js pro všechny axios instance');
+        // Import našeho konfigurovaného axios a nastavení hlavičky
+        import('./axios-config').then(configModule => {
+          const configuredAxios = configModule.default;
+          if (configuredAxios && configuredAxios.defaults && configuredAxios.defaults.headers) {
+            configuredAxios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            console.log('Token byl nastaven pro konfigurovaný axios');
+          }
+        }).catch(err => {
+          console.error('Chyba při importu axios-config:', err);
+        });
       } catch (error) {
         console.error('Chyba při nastavování tokenu v hlavičkách:', error);
       }
